@@ -25,7 +25,21 @@ function MainApp() {
 
   const fetchData = async () => {
     try {
-      const res = await fetch('http://localhost:3001/api/data')
+      // Build query parameters from demographics
+      const params = new URLSearchParams()
+      
+      if (demographic.ageGroup) params.append('age_groups', demographic.ageGroup)
+      if (demographic.incomeBracket) params.append('income_brackets', demographic.incomeBracket)
+      if (demographic.raceEthnicity) params.append('race_or_ethnicity', demographic.raceEthnicity)
+      if (demographic.location) params.append('location', demographic.location)
+      if (demographic.gender) params.append('gender', demographic.gender)
+      if (demographic.otherGroups) {
+        const groups = demographic.otherGroups.split(',').map(g => g.trim()).filter(Boolean)
+        if (groups.length > 0) params.append('other_groups', groups.join(','))
+      }
+      
+      const url = `http://localhost:3001/api/data${params.toString() ? '?' + params.toString() : ''}`
+      const res = await fetch(url)
       if (!res.ok) throw new Error('Failed to fetch')
       const result = await res.json()
       setData(result.data)
@@ -49,7 +63,10 @@ function MainApp() {
       await fetch('http://localhost:3001/api/demographics', {
         method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload)
       })
-      alert('Demographic submitted!')
+      alert('Demographic submitted! Refreshing data...')
+      // Refresh data with new demographics
+      setLoading(true)
+      await fetchData()
     } catch (err) { alert('Error submitting demographic') }
   }
 

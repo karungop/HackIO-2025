@@ -1,6 +1,7 @@
 import os
 import requests
-from flask import Flask, jsonify
+from flask import Flask, jsonify, request
+from flask_cors import CORS
 from groq import Groq
 from dotenv import load_dotenv
 
@@ -19,9 +20,90 @@ db = firestore.client()
 load_dotenv()
 
 app = Flask(__name__)
+CORS(app)  # Enable CORS for frontend-backend communication
 
 # Initialize Groq client
 groq_client = Groq(api_key=os.getenv("GROQ_API_KEY"))
+
+# Firestore query functions
+def query_bills_by_demographics(demographics):
+    """
+    Query Firestore for bills that match the provided demographics.
+    Returns up to 10 bills that have at least one matching demographic field.
+    """
+    try:
+        # Get all bills from Firestore
+        bills_ref = db.collection('bills')
+        bills = bills_ref.limit(100).stream()  # Get more bills to filter from
+        
+        matching_bills = []
+        demographic_fields = ['age_groups', 'income_brackets', 'race_or_ethnicity', 'location', 'gender', 'other_groups']
+        
+        for bill_doc in bills:
+            bill_data = bill_doc.to_dict()
+            bill_id = bill_doc.id
+            
+            # Check if any demographic field matches
+            has_match = False
+            for field in demographic_fields:
+                if field in bill_data and demographics.get(field):
+                    bill_field_values = bill_data[field] if isinstance(bill_data[field], list) else [bill_data[field]]
+                    user_field_values = demographics[field] if isinstance(demographics[field], list) else [demographics[field]]
+                    
+                    # Check for any intersection
+                    if any(value in bill_field_values for value in user_field_values):
+                        has_match = True
+                        break
+            
+            if has_match:
+                matching_bills.append({
+                    'id': bill_id,
+                    'title': bill_data.get('title', 'No title available'),
+                    'description': bill_data.get('description', 'No description available'),
+                    'update_date': bill_data.get('update_date', 'N/A'),
+                    'affected_populations_summary': bill_data.get('affected_populations_summary', ''),
+                    'categorized_populations': bill_data.get('categorized_populations', ''),
+                    'bill_number': bill_data.get('bill_number', 'N/A')
+                })
+                
+                # Stop at 10 bills
+                if len(matching_bills) >= 10:
+                    break
+        
+        return matching_bills
+        
+    except Exception as e:
+        print(f"Error querying Firestore: {str(e)}")
+        return []
+
+def get_top_10_bills():
+    """
+    Get the top 10 bills from Firestore (most recent or highest priority).
+    """
+    try:
+        bills_ref = db.collection('bills')
+        bills = bills_ref.limit(10).stream()
+        
+        top_bills = []
+        for bill_doc in bills:
+            bill_data = bill_doc.to_dict()
+            bill_id = bill_doc.id
+            
+            top_bills.append({
+                'id': bill_id,
+                'title': bill_data.get('title', 'No title available'),
+                'description': bill_data.get('description', 'No description available'),
+                'update_date': bill_data.get('update_date', 'N/A'),
+                'affected_populations_summary': bill_data.get('affected_populations_summary', ''),
+                'categorized_populations': bill_data.get('categorized_populations', ''),
+                'bill_number': bill_data.get('bill_number', 'N/A')
+            })
+        
+        return top_bills
+        
+    except Exception as e:
+        print(f"Error getting top bills from Firestore: {str(e)}")
+        return []
 
 # Fetch recent bills from the U.S. Congress API
 def fetch_recent_bills():
@@ -168,6 +250,52 @@ def analyze_bills():
     
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+
+@app.route('/api/data', methods=['GET'])
+def get_data():
+    """
+    Endpoint that frontend expects for bill data.
+    Queries Firestore based on demographics or returns top 10 bills.
+    """
+    try:
+        # Get demographics from query parameters
+        demographics = {}
+        demographic_fields = ['age_groups', 'income_brackets', 'race_or_ethnicity', 'location', 'gender', 'other_groups']
+        
+        for field in demographic_fields:
+            value = request.args.get(field)
+            if value:
+                # Handle comma-separated values
+                demographics[field] = [v.strip() for v in value.split(',') if v.strip()]
+        
+        # Check if any demographics are provided
+        has_demographics = any(demographics.values())
+        
+        if has_demographics:
+            # Query bills that match demographics
+            bills = query_bills_by_demographics(demographics)
+        else:
+            # Get top 10 bills if no demographics
+            bills = get_top_10_bills()
+        
+        return jsonify({
+            "success": True,
+            "data": bills,
+            "count": len(bills),
+            "filtered_by_demographics": has_demographics
+        })
+    
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/demographics', methods=['POST'])
+def submit_demographics():
+    """Endpoint for submitting demographic data"""
+    try:
+        # For now, just return success - you can implement storage later
+        return jsonify({"success": True, "message": "Demographics submitted successfully"})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
     
 def parse_demographics(raw_text):
     # Remove markdown-style ```json and ``` markers
@@ -255,7 +383,7 @@ def test_analyze_bills():
 
 if __name__ == '__main__':
     # Uncomment to test without running server
-    test_analyze_bills()
+    # test_analyze_bills()
     
-    # Uncomment to run Flask server
-    # app.run(debug=True, port=3001)
+    # Run Flask server
+    app.run(debug=True, port=3001, host='0.0.0.0')
