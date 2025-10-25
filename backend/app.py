@@ -329,7 +329,7 @@ def parse_demographics(raw_text):
         print("Error parsing demographics JSON:", e)
         return None
 
-def add_bill(bill_id, title,original, summary,raw_text):
+def add_bill(bill_id, title,original, summary,raw_text, affected_population_summary):
     bill_ref = db.collection("bills").document(bill_id)
     demographics = parse_demographics(raw_text)
     date = datetime.now()
@@ -339,7 +339,8 @@ def add_bill(bill_id, title,original, summary,raw_text):
             "original":original,
             "summary": summary,
             "date": date,
-            "demographics": demographics
+            "demographics": demographics, 
+            "population affect summary": affected_population_summary
         })
         print(f"✅ Added bill: {title}")
 
@@ -386,15 +387,15 @@ def test_analyze_bills():
             
             # print("\n2. Analyzing affected populations with Groq AI...")
             affected_populations = analyze_bill_population(title, description)
-            # print(f"\nAffected Populations Analysis:")
-            # print(affected_populations)
+            print(f"\nAffected Populations Analysis:")
+            print(affected_populations)
             
             # print("\n3. Categorizing populations...")
             categorized = categorize_population(affected_populations)
             # print(f"\nCategorized Populations:")
             # print(categorized)
             # print()
-            add_bill(bill.get('number'),title,summary_text, description, categorized)
+            add_bill(bill.get('number'),title,summary_text, description, categorized, affected_populations)
     
     except Exception as e:
         print(f"\n Error: {str(e)}")
@@ -403,7 +404,7 @@ def test_analyze_bills():
 
 if __name__ == '__main__':
     # Uncomment to test without running server
-    # test_analyze_bills()
+    test_analyze_bills()
     
     # Run Flask server
-    app.run(debug=True, port=3001, host='0.0.0.0')
+    # app.run(debug=True, port=3001, host='0.0.0.0')
