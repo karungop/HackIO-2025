@@ -6,118 +6,158 @@ export default function Home() {
   const [data, setData] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
-  const [newItem, setNewItem] = useState({ title: '', description: '' })
+  const [demographic, setDemographic] = useState({
+    ageGroup: '', incomeBracket: '', raceEthnicity: '', location: '', gender: '', otherGroups: '', reasoning: ''
+  })
+  const [leftOpen, setLeftOpen] = useState(true)
+  const [rightOpen, setRightOpen] = useState(true)
 
-  useEffect(() => {
-    fetchData()
-  }, [])
+  useEffect(() => { fetchData() }, [])
 
   const fetchData = async () => {
     try {
-      const response = await fetch('http://localhost:8000/api/data')
-      if (!response.ok) throw new Error('Failed to fetch data')
-      const result = await response.json()
+      const res = await fetch('http://localhost:8000/api/data')
+      if (!res.ok) throw new Error('Failed to fetch')
+      const result = await res.json()
       setData(result.data)
       setError(null)
-    } catch (err) {
-      setError('Failed to connect to backend. Make sure Flask server is running on port 8000.')
-    } finally {
-      setLoading(false)
-    }
+    } catch (err) { setError('Failed to connect to backend.') }
+    finally { setLoading(false) }
   }
 
-  const addItem = async (e) => {
+  const submitDemographic = async (e) => {
     e.preventDefault()
-    if (!newItem.title.trim()) return
-
-    try {
-      const response = await fetch('http://localhost:8000/api/data', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(newItem),
-      })
-      
-      if (response.ok) {
-        setNewItem({ title: '', description: '' })
-        fetchData() // Refresh the data
-      }
-    } catch (err) {
-      console.error('Error adding item:', err)
+    const payload = {
+      AgeGroup: demographic.ageGroup,
+      IncomeBracket: demographic.incomeBracket,
+      RaceOrEthnicity: demographic.raceEthnicity,
+      Location: demographic.location,
+      Gender: demographic.gender,
+      OtherGroups: demographic.otherGroups.split(',').map(g => g.trim()).filter(Boolean),
+      Reasoning: demographic.reasoning
     }
-  }
-
-  const deleteItem = async (id) => {
     try {
-      const response = await fetch(`http://localhost:8000/api/data/${id}`, {
-        method: 'DELETE',
+      await fetch('http://localhost:8000/api/demographics', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload)
       })
-      
-      if (response.ok) {
-        fetchData() // Refresh the data
-      }
-    } catch (err) {
-      console.error('Error deleting item:', err)
-    }
+      alert('Demographic submitted!')
+    } catch (err) { alert('Error submitting demographic') }
   }
 
   return (
-    <main className="main">
-      <div className="container">
-        <h1 className="title">
-          Next.js + Flask Full Stack App
-        </h1>
-        <p className="description">
-          Frontend connected to Flask backend API
-        </p>
+    <div className="app-layout">
+      
+      {/* Left Panel */}
+      <aside className={`panel left-panel ${leftOpen ? 'open' : 'collapsed'}`}>
+        <button className="toggle-btn" onClick={() => setLeftOpen(!leftOpen)}>
+          {leftOpen ? '<' : '>'}
+        </button>
+        {leftOpen && (
+          <div className="panel-content">
+            <h2>Filters</h2>
+            <form onSubmit={submitDemographic} className="form">
+              <select value={demographic.ageGroup} onChange={e => setDemographic({ ...demographic, ageGroup: e.target.value })} required>
+                <option value="">Age Group</option>
+                <option>0-18</option><option>19-25</option><option>25-40</option><option>41-65</option><option>65+</option>
+              </select>
+              <select value={demographic.incomeBracket} onChange={e => setDemographic({ ...demographic, incomeBracket: e.target.value })} required>
+                <option value="">Income Bracket</option>
+                <option>$0-11,600</option><option>$11,601-47,150</option><option>$47,151-100,525</option><option>$100,526+</option>
+              </select>
+              <select value={demographic.raceEthnicity} onChange={e => setDemographic({ ...demographic, raceEthnicity: e.target.value })} required>
+                <option value="">Race or Ethnicity</option><option>White</option><option>Black</option><option>Asian</option><option>Other</option>
+              </select>
+              <select value={demographic.location} onChange={e => setDemographic({ ...demographic, location: e.target.value })} required>
+                <option value="">Location</option><option>Urban</option><option>Rural</option><option>National</option>
+              </select>
+              <select value={demographic.gender} onChange={e => setDemographic({ ...demographic, gender: e.target.value })} required>
+                <option value="">Gender</option><option>Male</option><option>Female</option><option>Other</option>
+              </select>
+              <input type="text" placeholder="Other Groups" value={demographic.otherGroups} onChange={e => setDemographic({ ...demographic, otherGroups: e.target.value })} />
+              <textarea placeholder="Reasoning" value={demographic.reasoning} onChange={e => setDemographic({ ...demographic, reasoning: e.target.value })} />
+              <button type="submit" className="form-button">Apply Filters</button>
+            </form>
+          </div>
+        )}
+      </aside>
 
-        {/* Add new item form */}
-        <div className="form-container">
-          <h2>Add New Item</h2>
-          <form onSubmit={addItem} className="form">
-            <input
-              type="text"
-              placeholder="Title"
-              value={newItem.title}
-              onChange={(e) => setNewItem({ ...newItem, title: e.target.value })}
-              className="form-input"
-              required
-            />
-            <input
-              type="text"
-              placeholder="Description"
-              value={newItem.description}
-              onChange={(e) => setNewItem({ ...newItem, description: e.target.value })}
-              className="form-input"
-            />
-            <button type="submit" className="form-button">Add Item</button>
-          </form>
-        </div>
-
-        {/* Data display */}
-        <div className="data-section">
-          <h2>Backend Data</h2>
-          {loading && <p className="loading">Loading data from backend...</p>}
-          {error && <p className="error">{error}</p>}
-          {!loading && !error && (
-            <div className="data-grid">
-              {data.map((item) => (
-                <div key={item.id} className="data-card">
-                  <h3>{item.title}</h3>
-                  <p>{item.description}</p>
-                  <button 
-                    onClick={() => deleteItem(item.id)}
-                    className="delete-button"
-                  >
-                    Delete
-                  </button>
-                </div>
-              ))}
+      {/* Middle Feed */}
+      <main className="panel middle-panel">
+        <h2>Bill Feed</h2>
+        {loading && <p className="loading">Loading...</p>}
+        {error && <p className="error">{error}</p>}
+        <div className="data-grid">
+          {data.map(item => (
+            <div key={item.id} className="data-card">
+              <h3>{item.title}</h3>
+              <p>{item.description}</p>
+              <button onClick={() => alert('Show modal')} className="form-button">Details</button>
             </div>
-          )}
+          ))}
         </div>
-      </div>
-    </main>
+      </main>
+
+      {/* Right Panel */}
+      <aside className={`panel right-panel ${rightOpen ? 'open' : 'collapsed'}`}>
+        <button className="toggle-btn" onClick={() => setRightOpen(!rightOpen)}>
+          {rightOpen ? '>' : '<'}
+        </button>
+        {rightOpen && (
+          <div className="panel-content">
+            <h2>Chatbot</h2>
+            <div className="chatbot-box">Chatbot interface here</div>
+          </div>
+        )}
+      </aside>
+
+      <style jsx>{`
+        .app-layout {
+          display: flex;
+          height: 100vh;
+          font-family: sans-serif;
+          overflow: hidden;
+          background: linear-gradient(to bottom, #d6dbdc, #fff);
+        }
+        .panel {
+          background: #fff;
+          border-right: 1px solid #eaeaea;
+          transition: width 0.3s;
+          overflow-y: auto;
+          padding: 20px;
+        }
+        .left-panel { width: 300px; }
+        .right-panel { width: 300px; border-left: 1px solid #eaeaea; }
+        .middle-panel { flex: 1; padding: 20px; overflow-y: auto; background: #f9f9f9; }
+        .collapsed { width: 30px !important; padding: 5px !important; }
+        .toggle-btn {
+          display: block;
+          margin-bottom: 10px;
+          background: #0070f3;
+          color: #fff;
+          border: none;
+          padding: 5px 10px;
+          border-radius: 4px;
+          cursor: pointer;
+        }
+        .panel-content h2 { margin-bottom: 1rem; color: #333; }
+        .data-grid {
+          display: grid;
+          grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+          gap: 1rem;
+        }
+        .data-card {
+          background: #fff;
+          padding: 1rem;
+          border-radius: 8px;
+          box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+          border: 1px solid #eaeaea;
+        }
+        .data-card h3 { margin-bottom: 0.5rem; color: #333; font-size: 1.2rem; }
+        .data-card p { color: #666; line-height: 1.5; margin-bottom: 1rem; }
+        .form-button { background: #0070f3; color: #fff; border-radius: 5px; border: none; padding: 0.5rem 1rem; cursor: pointer; }
+        .form-button:hover { background: #0051a2; }
+        .chatbot-box { height: 90%; border: 1px solid #ccc; padding: 10px; border-radius: 6px; background: #f1f1f1; }
+      `}</style>
+    </div>
   )
 }
