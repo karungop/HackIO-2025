@@ -50,15 +50,19 @@ function MainApp() {
 
   const submitDemographic = async (e) => {
     e.preventDefault()
-    const payload = {
-      AgeGroup: demographic.ageGroup,
-      IncomeBracket: demographic.incomeBracket,
-      RaceOrEthnicity: demographic.raceEthnicity,
-      Location: demographic.location,
-      Gender: demographic.gender,
-      OtherGroups: demographic.otherGroups.split(',').map(g => g.trim()).filter(Boolean),
-      Reasoning: demographic.reasoning
+    
+    // Only include non-empty demographic values
+    const payload = {}
+    if (demographic.ageGroup) payload.AgeGroup = demographic.ageGroup
+    if (demographic.incomeBracket) payload.IncomeBracket = demographic.incomeBracket
+    if (demographic.raceEthnicity) payload.RaceOrEthnicity = demographic.raceEthnicity
+    if (demographic.location) payload.Location = demographic.location
+    if (demographic.gender) payload.Gender = demographic.gender
+    if (demographic.otherGroups.trim()) {
+      payload.OtherGroups = demographic.otherGroups.split(',').map(g => g.trim()).filter(Boolean)
     }
+    if (demographic.reasoning.trim()) payload.Reasoning = demographic.reasoning
+    
     try {
       await fetch('http://localhost:3001/api/demographics', {
         method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload)
@@ -67,7 +71,10 @@ function MainApp() {
       // Refresh data with new demographics
       setLoading(true)
       await fetchData()
-    } catch (err) { alert('Error submitting demographic') }
+    } catch (err) { 
+      console.error('Error submitting demographic:', err)
+      alert('Error submitting demographic: ' + err.message) 
+    }
   }
 
   const handleSignOut = async () => {
@@ -114,22 +121,22 @@ function MainApp() {
             <div className="panel-content">
               <h2>Filters</h2>
               <form onSubmit={submitDemographic} className="form">
-                <select value={demographic.ageGroup} onChange={e => setDemographic({ ...demographic, ageGroup: e.target.value })} required>
-                  <option value="">Age Group</option>
+                <select value={demographic.ageGroup} onChange={e => setDemographic({ ...demographic, ageGroup: e.target.value })}>
+                  <option value="">Age Group (Optional)</option>
                   <option>0-18</option><option>19-25</option><option>25-40</option><option>41-65</option><option>65+</option>
                 </select>
-                <select value={demographic.incomeBracket} onChange={e => setDemographic({ ...demographic, incomeBracket: e.target.value })} required>
-                  <option value="">Income Bracket</option>
+                <select value={demographic.incomeBracket} onChange={e => setDemographic({ ...demographic, incomeBracket: e.target.value })}>
+                  <option value="">Income Bracket (Optional)</option>
                   <option>$0-11,600</option><option>$11,601-47,150</option><option>$47,151-100,525</option><option>$100,526+</option>
                 </select>
-                <select value={demographic.raceEthnicity} onChange={e => setDemographic({ ...demographic, raceEthnicity: e.target.value })} required>
-                  <option value="">Race or Ethnicity</option><option>White</option><option>Black</option><option>Asian</option><option>Other</option>
+                <select value={demographic.raceEthnicity} onChange={e => setDemographic({ ...demographic, raceEthnicity: e.target.value })}>
+                  <option value="">Race or Ethnicity (Optional)</option><option>White</option><option>Black</option><option>Asian</option><option>Other</option>
                 </select>
-                <select value={demographic.location} onChange={e => setDemographic({ ...demographic, location: e.target.value })} required>
-                  <option value="">Location</option><option>Urban</option><option>Rural</option><option>National</option>
+                <select value={demographic.location} onChange={e => setDemographic({ ...demographic, location: e.target.value })}>
+                  <option value="">Location (Optional)</option><option>Urban</option><option>Rural</option><option>National</option>
                 </select>
-                <select value={demographic.gender} onChange={e => setDemographic({ ...demographic, gender: e.target.value })} required>
-                  <option value="">Gender</option><option>Male</option><option>Female</option><option>Other</option>
+                <select value={demographic.gender} onChange={e => setDemographic({ ...demographic, gender: e.target.value })}>
+                  <option value="">Gender (Optional)</option><option>Male</option><option>Female</option><option>Other</option>
                 </select>
                 <input type="text" placeholder="Other Groups" value={demographic.otherGroups} onChange={e => setDemographic({ ...demographic, otherGroups: e.target.value })} />
                 <textarea placeholder="Reasoning" value={demographic.reasoning} onChange={e => setDemographic({ ...demographic, reasoning: e.target.value })} />

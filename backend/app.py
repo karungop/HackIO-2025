@@ -32,38 +32,43 @@ def query_bills_by_demographics(demographics):
     Returns up to 10 bills that have at least one matching demographic field.
     """
     try:
-        # Get all bills from Firestore
+        # Get all bills from Firestore ordered by timestamp (most recent first)
+        # If timestamp doesn't exist, fall back to document ID ordering
         bills_ref = db.collection('bills')
-        bills = bills_ref.limit(100).stream()  # Get more bills to filter from
+        try:
+            bills = bills_ref.order_by('date', direction=firestore.Query.DESCENDING).limit(100).stream()
+            print("Using date ordering")
+        except Exception as e:
+            print(f"Date ordering failed: {e}, using fallback")
+            # Fallback if date field doesn't exist
+            bills = bills_ref.limit(100).stream()
         
         matching_bills = []
-        demographic_fields = ['age_groups', 'income_brackets', 'race_or_ethnicity', 'location', 'gender', 'other_groups']
         
         for bill_doc in bills:
             bill_data = bill_doc.to_dict()
             bill_id = bill_doc.id
             
-            # Check if any demographic field matches
+            # For now, since demographics are stored as a single field, 
+            # we'll return bills that have any demographic data when user provides demographics
             has_match = False
-            for field in demographic_fields:
-                if field in bill_data and demographics.get(field):
-                    bill_field_values = bill_data[field] if isinstance(bill_data[field], list) else [bill_data[field]]
-                    user_field_values = demographics[field] if isinstance(demographics[field], list) else [demographics[field]]
-                    
-                    # Check for any intersection
-                    if any(value in bill_field_values for value in user_field_values):
-                        has_match = True
-                        break
+            if any(demographics.values()):  # If user provided any demographics
+                # Check if bill has demographic data
+                if 'demographics' in bill_data and bill_data['demographics']:
+                    has_match = True
+            else:
+                # If no user demographics, include all bills
+                has_match = True
             
             if has_match:
                 matching_bills.append({
                     'id': bill_id,
                     'title': bill_data.get('title', 'No title available'),
-                    'description': bill_data.get('description', 'No description available'),
-                    'update_date': bill_data.get('update_date', 'N/A'),
-                    'affected_populations_summary': bill_data.get('affected_populations_summary', ''),
-                    'categorized_populations': bill_data.get('categorized_populations', ''),
-                    'bill_number': bill_data.get('bill_number', 'N/A')
+                    'description': bill_data.get('summary', 'No description available'),
+                    'update_date': bill_data.get('date', 'N/A'),
+                    'affected_populations_summary': bill_data.get('demographics', ''),
+                    'categorized_populations': bill_data.get('demographics', ''),
+                    'bill_number': bill_id
                 })
                 
                 # Stop at 10 bills
@@ -78,27 +83,42 @@ def query_bills_by_demographics(demographics):
 
 def get_top_10_bills():
     """
-    Get the top 10 bills from Firestore (most recent or highest priority).
+    Get the top 10 bills from Firestore (most recent by timestamp).
     """
     try:
         bills_ref = db.collection('bills')
-        bills = bills_ref.limit(10).stream()
+        print(f"Querying Firestore collection 'bills'...")
+        
+        try:
+            bills = bills_ref.order_by('date', direction=firestore.Query.DESCENDING).limit(10).stream()
+            print("Using date ordering")
+        except Exception as e:
+            print(f"Date ordering failed: {e}, using fallback")
+            # Fallback if date field doesn't exist
+            bills = bills_ref.limit(10).stream()
         
         top_bills = []
+        bill_count = 0
+        
         for bill_doc in bills:
+            bill_count += 1
             bill_data = bill_doc.to_dict()
             bill_id = bill_doc.id
+            
+            print(f"Found bill {bill_count}: {bill_id}")
+            print(f"Bill data keys: {list(bill_data.keys())}")
             
             top_bills.append({
                 'id': bill_id,
                 'title': bill_data.get('title', 'No title available'),
-                'description': bill_data.get('description', 'No description available'),
-                'update_date': bill_data.get('update_date', 'N/A'),
-                'affected_populations_summary': bill_data.get('affected_populations_summary', ''),
-                'categorized_populations': bill_data.get('categorized_populations', ''),
-                'bill_number': bill_data.get('bill_number', 'N/A')
+                'description': bill_data.get('summary', 'No description available'),
+                'update_date': bill_data.get('date', 'N/A'),
+                'affected_populations_summary': bill_data.get('demographics', ''),
+                'categorized_populations': bill_data.get('demographics', ''),
+                'bill_number': bill_id
             })
         
+        print(f"Total bills found: {bill_count}")
         return top_bills
         
     except Exception as e:
