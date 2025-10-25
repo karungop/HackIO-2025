@@ -8,8 +8,8 @@ load_dotenv()
 
 app = Flask(__name__)
 
-# Enable CORS for all routes
-CORS(app, origins=["http://localhost:3000"])
+# Enable CORS for all routes - more permissive for development
+CORS(app, origins=["http://localhost:3000", "http://localhost:3001", "http://127.0.0.1:3000"])
 
 # Sample data
 sample_data = [
@@ -95,6 +95,6 @@ def health_check():
     })
 
 if __name__ == '__main__':
-    port = int(os.environ.get('PORT', 5000))
+    port = int(os.environ.get('PORT', 3001))
     debug = os.environ.get('FLASK_DEBUG', 'True').lower() == 'true'
     app.run(host='0.0.0.0', port=port, debug=debug)
