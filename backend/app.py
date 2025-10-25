@@ -94,6 +94,12 @@ def health_check():
         "message": "Backend is running properly"
     })
 
+@app.route('/api/demographics', methods=['POST'])
+def demographics():
+    data = request.get_json()
+    print("Received demographic data:", data)
+    return jsonify({"message": "Demographic data received successfully"}), 200
+
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 3001))
     debug = os.environ.get('FLASK_DEBUG', 'True').lower() == 'true'

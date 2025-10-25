@@ -8,6 +8,18 @@ export default function Home() {
   const [error, setError] = useState(null)
   const [newItem, setNewItem] = useState({ title: '', description: '' })
 
+  // Demographic form state
+  const [demographic, setDemographic] = useState({
+    ageGroup: '',
+    incomeBracket: '',
+    raceEthnicity: '',
+    location: '',
+    gender: '',
+    otherGroups: '',
+    reasoning: ''
+  })
+  const [responseMessage, setResponseMessage] = useState('')
+
   useEffect(() => {
     fetchData()
   }, [])
@@ -33,15 +45,12 @@ export default function Home() {
     try {
       const response = await fetch('http://localhost:8000/api/data', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(newItem),
       })
-      
       if (response.ok) {
         setNewItem({ title: '', description: '' })
-        fetchData() // Refresh the data
+        fetchData()
       }
     } catch (err) {
       console.error('Error adding item:', err)
@@ -53,24 +62,57 @@ export default function Home() {
       const response = await fetch(`http://localhost:8000/api/data/${id}`, {
         method: 'DELETE',
       })
-      
-      if (response.ok) {
-        fetchData() // Refresh the data
-      }
+      if (response.ok) fetchData()
     } catch (err) {
       console.error('Error deleting item:', err)
+    }
+  }
+
+  // Handle demographic form submission
+  const submitDemographic = async (e) => {
+    e.preventDefault()
+    setResponseMessage('')
+
+    const payload = {
+      AgeGroup: demographic.ageGroup,
+      IncomeBracket: demographic.incomeBracket,
+      RaceOrEthnicity: demographic.raceEthnicity,
+      Location: demographic.location,
+      Gender: demographic.gender,
+      OtherGroups: demographic.otherGroups.split(',').map(g => g.trim()).filter(Boolean),
+      Reasoning: demographic.reasoning
+    }
+
+    try {
+      const response = await fetch('http://localhost:8000/api/demographics', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      })
+      if (response.ok) {
+        setResponseMessage('Demographic data submitted successfully!')
+        setDemographic({
+          ageGroup: '',
+          incomeBracket: '',
+          raceEthnicity: '',
+          location: '',
+          gender: '',
+          otherGroups: '',
+          reasoning: ''
+        })
+      } else {
+        setResponseMessage('Failed to submit demographic data.')
+      }
+    } catch (err) {
+      setResponseMessage('Error connecting to backend.')
     }
   }
 
   return (
     <main className="main">
       <div className="container">
-        <h1 className="title">
-          Next.js + Flask Full Stack App
-        </h1>
-        <p className="description">
-          Frontend connected to Flask backend API
-        </p>
+        <h1 className="title">Next.js + Flask Full Stack App</h1>
+        <p className="description">Frontend connected to Flask backend API</p>
 
         {/* Add new item form */}
         <div className="form-container">
@@ -95,6 +137,91 @@ export default function Home() {
           </form>
         </div>
 
+        {/* Demographic selection form */}
+        <div className="form-container" style={{ marginTop: '40px' }}>
+          <h2>Demographic Selection</h2>
+          <form onSubmit={submitDemographic} className="form">
+            <select
+              value={demographic.ageGroup}
+              onChange={(e) => setDemographic({ ...demographic, ageGroup: e.target.value })}
+              required
+            >
+              <option value="">Age Group</option>
+              <option>Children</option>
+              <option>Youth</option>
+              <option>Adults</option>
+              <option>Seniors</option>
+              <option>Veterans</option>
+              <option>All</option>
+            </select>
+
+            <select
+              value={demographic.incomeBracket}
+              onChange={(e) => setDemographic({ ...demographic, incomeBracket: e.target.value })}
+              required
+            >
+              <option value="">Income Bracket</option>
+              <option>Low-income</option>
+              <option>Middle-income</option>
+              <option>High-income</option>
+              <option>All</option>
+            </select>
+
+            <select
+              value={demographic.raceEthnicity}
+              onChange={(e) => setDemographic({ ...demographic, raceEthnicity: e.target.value })}
+              required
+            >
+              <option value="">Race or Ethnicity</option>
+              <option>Minorities</option>
+              <option>Indigenous</option>
+              <option>All</option>
+              <option>None specified</option>
+            </select>
+
+            <select
+              value={demographic.location}
+              onChange={(e) => setDemographic({ ...demographic, location: e.target.value })}
+              required
+            >
+              <option value="">Location</option>
+              <option>Urban</option>
+              <option>Rural</option>
+              <option>National</option>
+              <option>Specific states or regions</option>
+            </select>
+
+            <select
+              value={demographic.gender}
+              onChange={(e) => setDemographic({ ...demographic, gender: e.target.value })}
+              required
+            >
+              <option value="">Gender</option>
+              <option>Male</option>
+              <option>Female</option>
+              <option>Non-binary</option>
+              <option>Prefer not to say</option>
+              <option>Other</option>
+            </select>
+
+            <input
+              type="text"
+              placeholder="Other Groups (comma-separated)"
+              value={demographic.otherGroups}
+              onChange={(e) => setDemographic({ ...demographic, otherGroups: e.target.value })}
+            />
+
+            <textarea
+              placeholder="Reasoning"
+              value={demographic.reasoning}
+              onChange={(e) => setDemographic({ ...demographic, reasoning: e.target.value })}
+            />
+
+            <button type="submit" className="form-button">Submit Demographic</button>
+          </form>
+          {responseMessage && <p style={{ marginTop: '10px' }}>{responseMessage}</p>}
+        </div>
+
         {/* Data display */}
         <div className="data-section">
           <h2>Backend Data</h2>
@@ -106,7 +233,7 @@ export default function Home() {
                 <div key={item.id} className="data-card">
                   <h3>{item.title}</h3>
                   <p>{item.description}</p>
-                  <button 
+                  <button
                     onClick={() => deleteItem(item.id)}
                     className="delete-button"
                   >
