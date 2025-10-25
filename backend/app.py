@@ -97,6 +97,7 @@ def health_check():
 @app.route('/api/demographics', methods=['POST'])
 def demographics():
     data = request.get_json()
+    print(data)
     print("Received demographic data:", data)
     return jsonify({"message": "Demographic data received successfully"}), 200
 
