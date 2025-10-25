@@ -1,8 +1,10 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import ProtectedRoute from '../components/ProtectedRoute'
+import { useAuth } from '../contexts/AuthContext'
 
-export default function Home() {
+function MainApp() {
   const [data, setData] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
@@ -11,12 +13,13 @@ export default function Home() {
   })
   const [leftOpen, setLeftOpen] = useState(true)
   const [rightOpen, setRightOpen] = useState(true)
+  const { user, logout } = useAuth()
 
   useEffect(() => { fetchData() }, [])
 
   const fetchData = async () => {
     try {
-      const res = await fetch('http://localhost:8000/api/data')
+      const res = await fetch('http://localhost:3001/api/data')
       if (!res.ok) throw new Error('Failed to fetch')
       const result = await res.json()
       setData(result.data)
@@ -37,18 +40,39 @@ export default function Home() {
       Reasoning: demographic.reasoning
     }
     try {
-      await fetch('http://localhost:8000/api/demographics', {
+      await fetch('http://localhost:3001/api/demographics', {
         method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload)
       })
       alert('Demographic submitted!')
     } catch (err) { alert('Error submitting demographic') }
   }
 
+  const handleSignOut = async () => {
+    try {
+      await logout()
+    } catch (error) {
+      console.error('Error signing out:', error)
+    }
+  }
+
   return (
     <div className="app-layout">
+      {/* Header */}
+      <header className="app-header">
+        <div className="header-content">
+          <h1>Bill Finder</h1>
+          <div className="user-info">
+            <span>Welcome, {user?.email}</span>
+            <button onClick={handleSignOut} className="signout-button">
+              Sign Out
+            </button>
+          </div>
+        </div>
+      </header>
       
-      {/* Left Panel */}
-      <aside className={`panel left-panel ${leftOpen ? 'open' : 'collapsed'}`}>
+      <div className="main-content">
+        {/* Left Panel */}
+        <aside className={`panel left-panel ${leftOpen ? 'open' : 'collapsed'}`}>
         <button className="toggle-btn" onClick={() => setLeftOpen(!leftOpen)}>
           {leftOpen ? '<' : '>'}
         </button>
@@ -109,14 +133,69 @@ export default function Home() {
           </div>
         )}
       </aside>
+      </div>
 
       <style jsx>{`
         .app-layout {
           display: flex;
+          flex-direction: column;
           height: 100vh;
           font-family: sans-serif;
           overflow: hidden;
           background: linear-gradient(to bottom, #d6dbdc, #fff);
+        }
+        
+        .app-header {
+          background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+          color: white;
+          padding: 1rem 2rem;
+          box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+        }
+        
+        .header-content {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          max-width: 1200px;
+          margin: 0 auto;
+        }
+        
+        .header-content h1 {
+          margin: 0;
+          font-size: 1.5rem;
+          font-weight: 600;
+        }
+        
+        .user-info {
+          display: flex;
+          align-items: center;
+          gap: 1rem;
+        }
+        
+        .user-info span {
+          font-size: 0.9rem;
+          opacity: 0.9;
+        }
+        
+        .signout-button {
+          background: rgba(255, 255, 255, 0.2);
+          color: white;
+          border: 1px solid rgba(255, 255, 255, 0.3);
+          padding: 0.5rem 1rem;
+          border-radius: 6px;
+          cursor: pointer;
+          font-size: 0.9rem;
+          transition: background-color 0.2s;
+        }
+        
+        .signout-button:hover {
+          background: rgba(255, 255, 255, 0.3);
+        }
+        
+        .main-content {
+          display: flex;
+          flex: 1;
+          overflow: hidden;
         }
         .panel {
           background: #fff;
@@ -159,5 +238,13 @@ export default function Home() {
         .chatbot-box { height: 90%; border: 1px solid #ccc; padding: 10px; border-radius: 6px; background: #f1f1f1; }
       `}</style>
     </div>
+  )
+}
+
+export default function Home() {
+  return (
+    <ProtectedRoute>
+      <MainApp />
+    </ProtectedRoute>
   )
 }

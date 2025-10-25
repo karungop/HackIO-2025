@@ -1,14 +1,19 @@
 import './globals.css'
+import { AuthProvider } from '../contexts/AuthContext'
 
 export const metadata = {
-  title: 'Frontend App',
-  description: 'Next.js frontend application',
+  title: 'Bill Finder App',
+  description: 'Next.js frontend application with Firebase authentication',
 }
 
 export default function RootLayout({ children }) {
   return (
     <html lang="en">
-      <body>{children}</body>
+      <body>
+        <AuthProvider>
+          {children}
+        </AuthProvider>
+      </body>
     </html>
   )
 }
