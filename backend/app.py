@@ -4,6 +4,18 @@ from flask import Flask, jsonify
 from groq import Groq
 from dotenv import load_dotenv
 
+import firebase_admin
+from firebase_admin import credentials, firestore
+from datetime import datetime
+import json
+import re
+
+cred = credentials.Certificate("billfinder-28004-firebase-adminsdk-fbsvc-45403f54e0.json")
+firebase_admin.initialize_app(cred)
+
+db = firestore.client()
+
+
 load_dotenv()
 
 app = Flask(__name__)
@@ -24,6 +36,31 @@ def fetch_recent_bills():
     }
     response = requests.get(url, headers=headers, params=params)
     return response.json()
+
+def get_bill_summary(congress, bill_type, bill_number):
+    CONGRESS_API_BASE = "https://api.congress.gov/v3"
+    url = f"{CONGRESS_API_BASE}/bill/{congress}/{bill_type.lower()}/{bill_number}/summaries"
+    params = {
+        "format": "json",
+        "api_key": os.getenv("CONGRESS_API_KEY")
+    }
+    response = requests.get(url, params=params)
+    try:
+        response = requests.get(url, params=params)
+        response.raise_for_status()
+    except requests.RequestException as e:
+        print(f"Error fetching bill summary: {e}")
+        return None
+    
+    data = response.json()
+    summaries = data.get("summaries", [])
+
+    if not summaries:
+        return None
+
+    # Typically the first entry is the latest summary
+    latest_summary = summaries[0].get("text", "")
+    return latest_summary
 
 # Analyze bill description to determine affected populations
 def analyze_bill_population(title, description):
@@ -92,6 +129,8 @@ Return ONLY a JSON object like this (use empty arrays if none apply):
     )
     return response.choices[0].message.content
 
+
+
 @app.route('/api/analyze_bills', methods=['GET'])
 def analyze_bills():
     try:
@@ -129,6 +168,33 @@ def analyze_bills():
     
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+    
+def parse_demographics(raw_text):
+    # Remove markdown-style ```json and ``` markers
+    clean_text = re.sub(r"```json|```", "", raw_text).strip()
+
+    # Parse as JSON
+    try:
+        data = json.loads(clean_text)
+        return data
+    except json.JSONDecodeError as e:
+        print("Error parsing demographics JSON:", e)
+        return None
+
+def add_bill(bill_id, title,original, summary,raw_text):
+    bill_ref = db.collection("bills").document(bill_id)
+    demographics = parse_demographics(raw_text)
+    date = datetime.now()
+    if(original != None):
+        bill_ref.set({
+            "title": title,
+            "original":original,
+            "summary": summary,
+            "date": date,
+            "demographics": demographics
+        })
+        print(f"✅ Added bill: {title}")
+
 
 # Test function to demonstrate functionality
 def test_analyze_bills():
@@ -152,29 +218,38 @@ def test_analyze_bills():
             print(f"\n{'-' * 80}")
             print(f"BILL {i}")
             print(f"{'-' * 80}")
+            # print(bill)
             
             title = bill.get('title', 'No title available')
             latest_action = bill.get('latestAction', {})
             description = latest_action.get('text', 'No description available')
+
+            summary_text = get_bill_summary(
+                congress=bill.get('congress'),
+                bill_type=bill.get('type'),
+                bill_number=bill.get('number')
+            )
+            print(summary_text)
             
-            print(f"\nBill Number: {bill.get('number', 'N/A')}")
-            print(f"Title: {title}")
-            print(f"Latest Action: {description}")
-            print(f"Update Date: {bill.get('updateDate', 'N/A')}")
+            # print(f"\nBill Number: {bill.get('number', 'N/A')}")
+            # print(f"Title: {title}")
+            # print(f"Latest Action: {description}")
+            # print(f"Update Date: {bill.get('updateDate', 'N/A')}")
             
-            print("\n2. Analyzing affected populations with Groq AI...")
+            # print("\n2. Analyzing affected populations with Groq AI...")
             affected_populations = analyze_bill_population(title, description)
-            print(f"\nAffected Populations Analysis:")
-            print(affected_populations)
+            # print(f"\nAffected Populations Analysis:")
+            # print(affected_populations)
             
-            print("\n3. Categorizing populations...")
+            # print("\n3. Categorizing populations...")
             categorized = categorize_population(affected_populations)
-            print(f"\nCategorized Populations:")
-            print(categorized)
-            print()
+            # print(f"\nCategorized Populations:")
+            # print(categorized)
+            # print()
+            add_bill(bill.get('number'),title,summary_text, description, categorized)
     
     except Exception as e:
-        print(f"\n❌ Error: {str(e)}")
+        print(f"\n Error: {str(e)}")
         import traceback
         traceback.print_exc()
 
