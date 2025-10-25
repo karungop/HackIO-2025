@@ -1,192 +1,186 @@
-from flask import Flask, jsonify, request
-from flask_cors import CORS
 import os
-from dotenv import load_dotenv
 import requests
+from flask import Flask, jsonify
 from groq import Groq
+from dotenv import load_dotenv
 
-# Load environment variables
 load_dotenv()
 
-# Initialize Flask app
 app = Flask(__name__)
-CORS(app, origins=["http://localhost:3000", "http://localhost:3001", "http://127.0.0.1:3000"])
 
-# Groq client
-GROQ_API_KEY = os.getenv("GROQ_API_KEY")
-MODEL_NAME = os.getenv("GROQ_MODEL", "llama-3.3-70b-versatile")  # configurable via .env
-client = Groq(api_key=GROQ_API_KEY)
+# Initialize Groq client
+groq_client = Groq(api_key=os.getenv("GROQ_API_KEY"))
 
-# Congress.gov API
-CONGRESS_API_KEY = os.getenv("CONGRESS_API_KEY")
-CONGRESS_API_ROOT = "https://api.congress.gov/v3"
-
-# ---------------- Sample Data ----------------
-sample_data = [
-    {"id": 1, "title": "Welcome to Flask Backend", "description": "Your Flask backend is running successfully!"},
-    {"id": 2, "title": "API Endpoints", "description": "This backend provides RESTful API endpoints for your frontend."},
-    {"id": 3, "title": "CORS Enabled", "description": "Cross-Origin Resource Sharing is configured to work with your Next.js frontend."}
-]
-
-# ---------------- Helper Functions ----------------
-def fetch_bill_summary(congress, bill_type, bill_number):
-    url = f"{CONGRESS_API_ROOT}/bill/{congress}/{bill_type}/{bill_number}/summaries?api_key={CONGRESS_API_KEY}"
-    resp = requests.get(url)
-    resp.raise_for_status()
-    data = resp.json()
-    summaries = data.get("summaries", [])
-    if summaries:
-        return summaries[0].get("text", "")
-    return ""
-
-# ---------------- Routes ----------------
-
-@app.route('/')
-def home():
-    return jsonify({
-        "message": "Flask Backend is running!",
-        "status": "success",
-        "endpoints": {
-            "GET /api/data": "Get all data",
-            "GET /api/data/<id>": "Get specific data by ID",
-            "POST /api/data": "Create new data",
-            "PUT /api/data/<id>": "Update data by ID",
-            "DELETE /api/data/<id>": "Delete data by ID",
-            "GET /api/health": "Health check",
-            "POST /api/analyze_bill": "Analyze bill with Groq"
-        }
-    })
-
-# ---------------- Data CRUD ----------------
-@app.route('/api/data', methods=['GET'])
-def get_all_data():
-    return jsonify({"data": sample_data, "count": len(sample_data)})
-
-@app.route('/api/data/<int:data_id>', methods=['GET'])
-def get_data(data_id):
-    item = next((item for item in sample_data if item["id"] == data_id), None)
-    if item:
-        return jsonify({"data": item})
-    return jsonify({"error": "Data not found"}), 404
-
-@app.route('/api/data', methods=['POST'])
-def create_data():
-    data = request.get_json()
-    if not data or 'title' not in data:
-        return jsonify({"error": "Title is required"}), 400
-    new_id = max([item["id"] for item in sample_data]) + 1 if sample_data else 1
-    new_item = {
-        "id": new_id,
-        "title": data["title"],
-        "description": data.get("description", "")
+# Fetch recent bills from the U.S. Congress API
+def fetch_recent_bills():
+    url = "https://api.congress.gov/v3/bill"
+    headers = {
+        "X-API-Key": os.getenv("CONGRESS_API_KEY")
     }
-    sample_data.append(new_item)
-    return jsonify({"data": new_item, "message": "Data created successfully"}), 201
+    params = {
+        "limit": 2,
+        "sort": "updateDate desc",
+        "format": "json"
+    }
+    response = requests.get(url, headers=headers, params=params)
+    return response.json()
 
-@app.route('/api/data/<int:data_id>', methods=['PUT'])
-def update_data(data_id):
-    data = request.get_json()
-    item = next((item for item in sample_data if item["id"] == data_id), None)
-    if not item:
-        return jsonify({"error": "Data not found"}), 404
-    if 'title' in data:
-        item["title"] = data["title"]
-    if 'description' in data:
-        item["description"] = data["description"]
-    return jsonify({"data": item, "message": "Data updated successfully"})
+# Analyze bill description to determine affected populations
+def analyze_bill_population(title, description):
+    prompt = f"""Analyze the following bill and identify the specific populations that would be affected by it.
 
-@app.route('/api/data/<int:data_id>', methods=['DELETE'])
-def delete_data(data_id):
-    global sample_data
-    item = next((item for item in sample_data if item["id"] == data_id), None)
-    if not item:
-        return jsonify({"error": "Data not found"}), 404
-    sample_data = [i for i in sample_data if i["id"] != data_id]
-    return jsonify({"message": "Data deleted successfully"})
+Bill Title: {title}
+Bill Description: {description}
 
-# ---------------- Health Check ----------------
-@app.route('/api/health', methods=['GET'])
-def health_check():
-    return jsonify({"status": "healthy", "message": "Backend is running properly"})
+Please identify and categorize the affected populations into these brackets:
+- Age groups (children, youth, working-age adults, seniors, etc.)
+- Economic groups (low-income, middle-class, wealthy, small businesses, corporations, etc.)
+- Geographic areas (rural, urban, specific states/regions, etc.)
+- Occupational groups (farmers, healthcare workers, teachers, veterans, etc.)
+- Other demographic groups (students, homeowners, immigrants, disabled persons, etc.)
 
-# ---------------- Analyze Bill via Groq ----------------
-@app.route("/api/analyze_bill", methods=["POST"])
-def analyze_bill():
-    data = request.get_json()
-    desc = data.get("description")
-    congress = data.get("congress")
-    bill_type = data.get("billType")
-    bill_number = data.get("billNumber")
+Provide a concise summary of which populations are primarily affected and how."""
 
-    # Fetch summary if no description
-    if not desc:
-        if not (congress and bill_type and bill_number):
-            return jsonify({"error": "Provide either a description or congress + billType + billNumber"}), 400
-        try:
-            desc = fetch_bill_summary(congress, bill_type, bill_number)
-            if not desc:
-                return jsonify({"error": "No summary available for this bill"}), 404
-        except Exception as e:
-            return jsonify({"error": f"Failed to fetch bill summary: {str(e)}"}), 500
+    response = groq_client.chat.completions.create(
+        model="llama-3.3-70b-versatile",
+        messages=[{"role": "user", "content": prompt}]
+    )
+    return response.choices[0].message.content
 
-    # Groq prompt with strict dropdown categories
-    prompt = """
-You are a policy analysis model that classifies government bills or amendments
-based on which populations they affect. Always respond in strict JSON format
-with only the exact options below.
+# Categorize populations into specified brackets
+def categorize_population(population_analysis):
+    """
+    Convert Groq AI free-text population analysis into structured categories
+    using the specified options.
+    """
+    prompt = f"""
+Based on this population analysis, extract and categorize the affected groups 
+into ONLY the following options:
 
-Categories:
+Age:
+0-18, 19-25, 25-40, 41-65, 65+
 
-AgeGroup (choose one):
-- "0-18"
-- "19-25"
-- "25-40"
-- "41-65"
-- "65+"
+Income:
+$0-11,600, $11,601-47,150, $47,151-100,525, $100,526+
 
-IncomeBracket (choose one):
-- "$0-11,600"
-- "$11,601-47,150"
-- "$47,151-100,525"
-- "$100,526+"
+Race:
+White, Black, Asian, Other
 
-RaceOrEthnicity (choose one):
-- "White"
-- "Black"
-- "Asian"
-- "Other"
+Location:
+Urban, Rural, National
 
-Location (choose one):
-- "Urban"
-- "Rural"
-- "National"
+Gender:
+Male, Female, Other
 
-Gender (choose one):
-- "Male"
-- "Female"
-- "Other"
+Population Analysis:
+{population_analysis}
 
-OtherGroups: optional array of any other specific groups affected (e.g., "Students", "Veterans").
+Return ONLY a JSON object like this (use empty arrays if none apply):
 
-Reasoning: short explanation of why each category was selected.
+{{
+    "age_groups": [],
+    "income_brackets": [],
+    "race_or_ethnicity": [],
+    "location": [],
+    "gender": [],
+    "other_groups": []
+}}
 """
+    response = groq_client.chat.completions.create(
+        model="llama-3.3-70b-versatile",
+        messages=[{"role": "user", "content": prompt}]
+    )
+    return response.choices[0].message.content
 
+@app.route('/api/analyze_bills', methods=['GET'])
+def analyze_bills():
     try:
-        response = client.chat.completions.create(
-            model=MODEL_NAME,
-            messages=[
-                {"role": "system", "content": prompt},
-                {"role": "user", "content": desc}
-            ],
-            temperature=0.2
-        )
-        output = response.choices[0].message.content
-        return jsonify({"analysis": output})
+        bills_data = fetch_recent_bills()
+        analyzed_bills = []
+
+        # Check if we got bills back
+        if 'bills' not in bills_data:
+            return jsonify({"error": "No bills found in API response", "data": bills_data}), 500
+
+        for bill in bills_data['bills'][:2]:  # Limit to 2 bills
+            title = bill.get('title', 'No title available')
+            # Get the latest action as description if no description field
+            latest_action = bill.get('latestAction', {})
+            description = latest_action.get('text', 'No description available')
+            
+            # Analyze populations
+            affected_populations = analyze_bill_population(title, description)
+            categorized_populations = categorize_population(affected_populations)
+            
+            analyzed_bills.append({
+                'bill_number': bill.get('number', 'N/A'),
+                'title': title,
+                'description': description,
+                'update_date': bill.get('updateDate', 'N/A'),
+                'affected_populations_summary': affected_populations,
+                'categorized_populations': categorized_populations
+            })
+
+        return jsonify({
+            "success": True,
+            "count": len(analyzed_bills),
+            "bills": analyzed_bills
+        })
+    
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
-# ---------------- Run Server ----------------
+# Test function to demonstrate functionality
+def test_analyze_bills():
+    """Test the bill analysis without running the Flask server"""
+    print("Testing Bill Analysis System")
+    print("=" * 80)
+    
+    try:
+        # Fetch bills
+        print("\n1. Fetching recent bills from Congress API...")
+        bills_data = fetch_recent_bills()
+        
+        if 'bills' not in bills_data:
+            print(f"Error: No bills found. Response: {bills_data}")
+            return
+        
+        print(f"✓ Found {len(bills_data['bills'])} bills")
+        
+        # Analyze first 2 bills
+        for i, bill in enumerate(bills_data['bills'][:2], 1):
+            print(f"\n{'-' * 80}")
+            print(f"BILL {i}")
+            print(f"{'-' * 80}")
+            
+            title = bill.get('title', 'No title available')
+            latest_action = bill.get('latestAction', {})
+            description = latest_action.get('text', 'No description available')
+            
+            print(f"\nBill Number: {bill.get('number', 'N/A')}")
+            print(f"Title: {title}")
+            print(f"Latest Action: {description}")
+            print(f"Update Date: {bill.get('updateDate', 'N/A')}")
+            
+            print("\n2. Analyzing affected populations with Groq AI...")
+            affected_populations = analyze_bill_population(title, description)
+            print(f"\nAffected Populations Analysis:")
+            print(affected_populations)
+            
+            print("\n3. Categorizing populations...")
+            categorized = categorize_population(affected_populations)
+            print(f"\nCategorized Populations:")
+            print(categorized)
+            print()
+    
+    except Exception as e:
+        print(f"\n❌ Error: {str(e)}")
+        import traceback
+        traceback.print_exc()
+
 if __name__ == '__main__':
-    port = int(os.environ.get('PORT', 3001))
-    debug = os.environ.get('FLASK_DEBUG', 'True').lower() == 'true'
-    app.run(host='0.0.0.0', port=port, debug=debug)
+    # Uncomment to test without running server
+    test_analyze_bills()
+    
+    # Uncomment to run Flask server
+    # app.run(debug=True, port=3001)
