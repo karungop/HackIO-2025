@@ -259,3 +259,69 @@ a {
     gap: 0.75rem;
   }
 }
+.right-panel.open {
+  display: flex;
+  flex-direction: column;
+}
+
+.chatbot-section {
+  display: flex;
+  flex-direction: column;
+  height: 100%; /* full height of right panel */
+}
+
+.chatbot-title {
+  font-size: 1.1rem;
+  font-weight: 600;
+  margin-bottom: 8px;
+  color: #555;
+  text-align: center;
+}
+
+.chatbot-box {
+  display: flex;
+  flex-direction: column;
+  flex: 1; /* take remaining space */
+  background: #f5f7fa;
+  border: 1px solid #ccc;
+  border-radius: 10px;
+  padding: 10px;
+  box-sizing: border-box;
+}
+
+.messages {
+  flex: 1; /* take all remaining height */
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.chat-input-area {
+  display: flex;
+  gap: 5px;
+  flex-shrink: 0;
+}
+
+.chat-input-area input {
+  flex: 1;
+  padding: 8px;
+  border: 1px solid #ccc;
+  border-radius: 6px;
+  box-sizing: border-box;
+}
+
+.chat-input-area button {
+  flex-shrink: 0;
+  padding: 8px 12px;
+  background: #0070f3;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.chat-input-area button:hover {
+  background: #0051a2;
+}
