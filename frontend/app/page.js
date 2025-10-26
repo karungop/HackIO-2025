@@ -102,6 +102,48 @@ function MainApp() {
     setShowFullAnalysis(false)
   }
 
+  // Parse demographics data
+  const parseDemographics = (demographicsData) => {
+    if (!demographicsData) return null
+    
+    try {
+      let parsed
+      if (typeof demographicsData === 'string') {
+        parsed = JSON.parse(demographicsData)
+      } else {
+        parsed = demographicsData
+      }
+      return parsed
+    } catch (e) {
+      return null
+    }
+  }
+
+  // Render demographic tags
+  const renderDemographicTags = (demographicsData) => {
+    const demographics = parseDemographics(demographicsData)
+    if (!demographics) return null
+
+    const categories = [
+      { key: 'age_groups', label: 'Age' },
+      { key: 'income_brackets', label: 'Income' },
+      { key: 'race_or_ethnicity', label: 'Race/Ethnicity' },
+      { key: 'location', label: 'Location' },
+      { key: 'gender', label: 'Gender' }
+    ]
+
+    return categories.map(category => {
+      const values = demographics[category.key]
+      if (!values || !Array.isArray(values) || values.length === 0) return null
+      
+      return values.map((value, idx) => (
+        <span key={`${category.key}-${idx}`} className="demographic-tag" data-category={category.key}>
+          <span className="tag-category">{category.label}:</span> {value}
+        </span>
+      ))
+    }).filter(Boolean)
+  }
+
   const fetchData = async () => {
     try {
       // Build query parameters from demographics
@@ -292,7 +334,19 @@ function MainApp() {
 
   const handleMouseUp = useCallback(() => {
     setIsDragging(false)
+<<<<<<< HEAD
   }, [])
+=======
+  }
+
+  // Reset panel width when closed
+  const handleRightPanelClose = () => {
+    setRightOpen(false)
+    setRightPanelExtendedWidth(350) // Reset to original width
+    // Clear all context selections when closing panel
+    setContextButtonStates({})
+  }
+>>>>>>> 6b22d1b9be4a6706758b586a8b06269739a23a10
 
   // Reset panel width when opening (to ensure it starts at original size)
   const handleRightPanelToggle = useCallback(() => {
@@ -325,6 +379,29 @@ function MainApp() {
     }
   }, [isDragging])
 
+<<<<<<< HEAD
+=======
+  useEffect(() => {
+    const loadUserDemographics = async () => {
+      if (user?.uid) {
+        try {
+          const response = await fetch(`http://localhost:3001/api/user-demographics/${user.uid}`)
+          const data = await response.json()
+          
+          if (data.success && data.has_demographics) {
+            setDemographic(data.demographics)
+            // Automatically apply filters if demographics exist
+            fetchData()
+          }
+        } catch (error) {
+          console.error('Error loading user demographics:', error)
+        }
+      }
+    }
+    
+    loadUserDemographics()
+  }, [user])
+>>>>>>> 6b22d1b9be4a6706758b586a8b06269739a23a10
 
   return (
     <div className="app-layout">
@@ -338,6 +415,7 @@ function MainApp() {
           Filters
         </button>
 
+<<<<<<< HEAD
         <LeftSidePanel
           leftOpen={leftOpen}
           onClose={() => setLeftOpen(false)}
@@ -346,6 +424,75 @@ function MainApp() {
           onSubmit={handleDemographicSubmit}
           onClearFilters={handleClearFilters}
         />
+=======
+        {/* Left Accordion Panel */}
+        <div className={`accordion-panel left-accordion ${leftOpen ? 'open' : 'closed'}`}>
+          <div className="accordion-content">
+            <div className="accordion-header">
+              <h2>Filters</h2>
+              <button className="close-btn" onClick={() => setLeftOpen(false)}>×</button>
+            </div>
+            <form onSubmit={submitDemographic} className="form">
+              <select value={demographic.ageGroup} onChange={e => setDemographic({ ...demographic, ageGroup: e.target.value })}>
+                <option value="">Age Group (Optional)</option>
+                <option>0-18</option><option>19-25</option><option>25-40</option><option>41-65</option><option>65+</option>
+              </select>
+              <select value={demographic.incomeBracket} onChange={e => setDemographic({ ...demographic, incomeBracket: e.target.value })}>
+                <option value="">Income Bracket (Optional)</option>
+                <option>$0-11,600</option><option>$11,601-47,150</option><option>$47,151-100,525</option><option>$100,526+</option>
+              </select>
+              <select value={demographic.raceEthnicity} onChange={e => setDemographic({ ...demographic, raceEthnicity: e.target.value })}>
+                <option value="">Race or Ethnicity (Optional)</option>
+                <option>Hispanic or Latino</option>
+                <option>White (not Hispanic or Latino)</option>
+                <option>Black or African American</option>
+                <option>Asian</option>
+                <option>American Indian or Alaska Native</option>
+                <option>Native Hawaiian or Other Pacific Islander</option>
+              </select>
+              <select value={demographic.location} onChange={e => setDemographic({ ...demographic, location: e.target.value })}>
+                <option value="">Location (Optional)</option>
+                <option>Alabama</option><option>Alaska</option><option>Arizona</option><option>Arkansas</option><option>California</option>
+                <option>Colorado</option><option>Connecticut</option><option>Delaware</option><option>Florida</option><option>Georgia</option>
+                <option>Hawaii</option><option>Idaho</option><option>Illinois</option><option>Indiana</option><option>Iowa</option>
+                <option>Kansas</option><option>Kentucky</option><option>Louisiana</option><option>Maine</option><option>Maryland</option>
+                <option>Massachusetts</option><option>Michigan</option><option>Minnesota</option><option>Mississippi</option><option>Missouri</option>
+                <option>Montana</option><option>Nebraska</option><option>Nevada</option><option>New Hampshire</option><option>New Jersey</option>
+                <option>New Mexico</option><option>New York</option><option>North Carolina</option><option>North Dakota</option><option>Ohio</option>
+                <option>Oklahoma</option><option>Oregon</option><option>Pennsylvania</option><option>Rhode Island</option><option>South Carolina</option>
+                <option>South Dakota</option><option>Tennessee</option><option>Texas</option><option>Utah</option><option>Vermont</option>
+                <option>Virginia</option><option>Washington</option><option>West Virginia</option><option>Wisconsin</option><option>Wyoming</option>
+              </select>
+              <select value={demographic.gender} onChange={e => setDemographic({ ...demographic, gender: e.target.value })}>
+                <option value="">Gender (Optional)</option><option>Male</option><option>Female</option><option>Other</option>
+              </select>
+              <div style={{ display: 'flex', gap: '10px' }}>
+                <button type="submit" className="form-button">Apply Filters</button>
+                <button type="button" className="form-button" onClick={async () => {
+                  setDemographic({
+                    ageGroup: '', incomeBracket: '', raceEthnicity: '', location: '', gender: ''
+                  })
+                  setLoading(true)
+                  
+                  try {
+                    // Fetch data with cleared demographics
+                    const res = await fetch('http://localhost:3001/api/data')
+                    if (!res.ok) throw new Error('Failed to fetch')
+                    const result = await res.json()
+                    setData(result.data)
+                    setError(null)
+                    showPopupNotification('success', 'Filters cleared! Data refreshed.')
+                  } catch (err) {
+                    showPopupNotification('error', 'Error clearing filters: ' + err.message)
+                  } finally {
+                    setLoading(false)
+                  }
+                }} style={{ background: '#666' }}>Clear Filters</button>
+              </div>
+            </form>
+          </div>
+        </div>
+>>>>>>> 6b22d1b9be4a6706758b586a8b06269739a23a10
 
         <main className="middle-panel">
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
@@ -358,6 +505,7 @@ function MainApp() {
           {error && <p className="error">{error}</p>}
           <div className="data-grid">
             {data.map(item => (
+<<<<<<< HEAD
               <BillCard
                 key={item.id}
                 bill={item}
@@ -368,10 +516,46 @@ function MainApp() {
                 }}
                 onAddContext={handleAddContextClick}
               />
+=======
+              <div key={item.id} className={`data-card ${contextButtonStates[item.id] ? 'context-active' : ''}`}>
+                <h3>{item.title}</h3>
+                <div className="bill-date">
+                  <strong>Latest Action Date:</strong> {item.update_date && item.update_date !== 'N/A' ? 
+                    (() => {
+                      try {
+                        const date = new Date(item.update_date);
+                        return isNaN(date.getTime()) ? item.update_date : date.toLocaleDateString('en-US', {
+                          year: 'numeric',
+                          month: 'long',
+                          day: 'numeric'
+                        });
+                      } catch (e) {
+                        return item.update_date;
+                      }
+                    })() : 'N/A'}
+                </div>
+                <p>{item.description}</p>
+                <div className="card-actions">
+                  <button onClick={() => openBillModal(item)} className="details-button">Details</button>
+                  <button 
+                    onClick={() => {
+                      handleAddContextClick(item.id)
+                      if (!rightOpen) {
+                        handleRightPanelToggle()
+                      }
+                    }}
+                    className={`add-context-button ${contextButtonStates[item.id] ? 'clicked' : ''}`}
+                  >
+                    {contextButtonStates[item.id] ? 'Chat' : 'Open Chat'}
+                  </button>
+                </div>
+              </div>
+>>>>>>> 6b22d1b9be4a6706758b586a8b06269739a23a10
             ))}
           </div>
         </main>
 
+<<<<<<< HEAD
         <button 
           className={`side-button right-side-button ${rightOpen ? 'hidden' : ''}`} 
           onClick={() => {
@@ -383,6 +567,8 @@ function MainApp() {
         >
           Assistant
         </button>
+=======
+>>>>>>> 6b22d1b9be4a6706758b586a8b06269739a23a10
 
         <RightSidePanel
           rightOpen={rightOpen}
@@ -406,6 +592,7 @@ function MainApp() {
       )}
 
       {isModalOpen && selectedBill && (
+<<<<<<< HEAD
         <BillModal
           isOpen={isModalOpen}
           bill={selectedBill}
@@ -417,6 +604,102 @@ function MainApp() {
           }}
           onToggleAnalysis={() => setShowFullAnalysis(!showFullAnalysis)}
         />
+=======
+        <div className="modal-overlay" onClick={closeBillModal}>
+          <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h2 className="modal-title">{selectedBill.title}</h2>
+              <button className="modal-close" onClick={closeBillModal}>×</button>
+            </div>
+            <div className="modal-body">
+              <div className="bill-info-section">
+                <h3>Bill Information</h3>
+                <div className="bill-detail-item">
+                  <strong>Bill Number:</strong> {selectedBill.bill_number}
+                </div>
+                <div className="bill-detail-item">
+                  <strong>Latest Action Date:</strong> {selectedBill.update_date && selectedBill.update_date !== 'N/A' ? 
+                    (() => {
+                      try {
+                        const date = new Date(selectedBill.update_date);
+                        return isNaN(date.getTime()) ? selectedBill.update_date : date.toLocaleDateString('en-US', {
+                          year: 'numeric',
+                          month: 'long',
+                          day: 'numeric'
+                        });
+                      } catch (e) {
+                        return selectedBill.update_date;
+                      }
+                    })() : 'N/A'}
+                </div>
+                <div className="bill-detail-item">
+                  <strong>Description:</strong>
+                  <p className="bill-description">{selectedBill.description}</p>
+                </div>
+                {selectedBill['xml link'] && (
+                  <div className="bill-detail-item">
+                    <strong>Full Bill Text:</strong>
+                    <div className="xml-link-container">
+                      <a 
+                        href={selectedBill['xml link']} 
+                        target="_blank" 
+                        rel="noopener noreferrer"
+                        className="xml-link"
+                      >
+                        View Full Bill Text (XML)
+                      </a>
+                    </div>
+                  </div>
+                )}
+                {selectedBill.categorized_populations && (
+                  <div className="bill-detail-item">
+                    <strong>Demographic Categories:</strong>
+                    <div className="demographic-tags-container">
+                      {renderDemographicTags(selectedBill.categorized_populations)}
+                    </div>
+                  </div>
+                )}
+              </div>
+              
+              <div className="population-analysis-section">
+                <h3>Population Impact Analysis</h3>
+                <div className="population-content">
+                  {selectedBill.population_affect_summary ? (
+                    <div className="formatted-text">
+                      {(() => {
+                        const fullText = selectedBill.population_affect_summary;
+                        const shouldShowToggle = fullText.length > 200;
+                        
+                        return (
+                          <>
+                            <div className={`analysis-text-container ${showFullAnalysis ? 'expanded' : 'collapsed'}`}>
+                              <p className="analysis-paragraph">
+                                {fullText.replace(/\*/g, '')}
+                              </p>
+                            </div>
+                            {shouldShowToggle && (
+                              <div className="show-more-container">
+                                <span 
+                                  className="show-more-text"
+                                  onClick={() => setShowFullAnalysis(!showFullAnalysis)}
+                                >
+                                  {showFullAnalysis ? 'Show Less' : 'Show More'}
+                                </span>
+                              </div>
+                            )}
+                          </>
+                        );
+                      })()}
+                    </div>
+                  ) : (
+                    <p className="no-analysis">No population impact analysis available for this bill.</p>
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+>>>>>>> 6b22d1b9be4a6706758b586a8b06269739a23a10
       )}
 
 
@@ -718,6 +1001,8 @@ function MainApp() {
           box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
           border: 1px solid rgba(0, 0, 0, 0.05);
           transition: all 0.2s ease;
+          display: flex;
+          flex-direction: column;
         }
         
         .data-card:hover {
@@ -752,7 +1037,7 @@ function MainApp() {
         .card-actions {
           display: flex;
           gap: 0.75rem;
-          margin-top: 0.75rem;
+          margin-top: auto;
           align-items: center;
           justify-content: space-between;
         }
@@ -1341,6 +1626,58 @@ function MainApp() {
         
         .add-context-button.clicked:hover {
           color: #5a67d8;
+        }
+        
+        /* Demographic Tags */
+        .demographic-tags-container {
+          display: flex;
+          flex-wrap: wrap;
+          gap: 0.5rem;
+          margin-top: 0.75rem;
+        }
+        
+        .demographic-tag {
+          background: linear-gradient(135deg, rgba(102, 126, 234, 0.1) 0%, rgba(118, 75, 162, 0.1) 100%);
+          color: #667eea;
+          padding: 0.5rem 0.75rem;
+          border-radius: 6px;
+          font-size: 0.85rem;
+          font-weight: 500;
+          border: 1px solid rgba(102, 126, 234, 0.2);
+          display: inline-flex;
+          align-items: center;
+          gap: 0.5rem;
+        }
+        
+        .tag-category {
+          font-weight: 600;
+          opacity: 0.8;
+        }
+        
+        /* New styles for XML link */
+        .xml-link-container {
+          margin-top: 0.75rem;
+          padding-top: 0.75rem;
+          border-top: 1px solid #e5e7eb;
+        }
+
+        .xml-link {
+          display: inline-block;
+          background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+          color: white;
+          padding: 0.6rem 1.2rem;
+          border-radius: 8px;
+          font-size: 0.9rem;
+          font-weight: 500;
+          text-decoration: none;
+          transition: all 0.2s ease;
+          white-space: nowrap;
+        }
+
+        .xml-link:hover {
+          background: linear-gradient(135deg, #764ba2 0%, #667eea 100%);
+          transform: translateY(-1px);
+          box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
         }
         
       `}</style>

@@ -113,10 +113,38 @@ def query_bills_by_demographics(demographics):
             
             # Check if bill matches user demographics
             has_match = False
+<<<<<<< HEAD
             if any(demographics.values()):
+=======
+            if any(demographics.values()):  # If user provided any demographics
+                # Try to get demographic data from demographics field
+                bill_demographics = None
+>>>>>>> 6b22d1b9be4a6706758b586a8b06269739a23a10
                 if 'demographics' in bill_data and bill_data['demographics']:
-                    bill_demographics = bill_data['demographics']
+                    demographics_data = bill_data['demographics']
                     
+<<<<<<< HEAD
+=======
+                    # Handle both string and dict formats
+                    if isinstance(demographics_data, str):
+                        try:
+                            import json
+                            bill_demographics = json.loads(demographics_data)
+                        except json.JSONDecodeError:
+                            # If it's not valid JSON, try to extract JSON from the string
+                            import re
+                            json_match = re.search(r'\{.*\}', demographics_data, re.DOTALL)
+                            if json_match:
+                                try:
+                                    bill_demographics = json.loads(json_match.group())
+                                except json.JSONDecodeError:
+                                    pass
+                    elif isinstance(demographics_data, dict):
+                        bill_demographics = demographics_data
+                
+                if bill_demographics:
+                    # Check each demographic field for matches (excluding other_groups)
+>>>>>>> 6b22d1b9be4a6706758b586a8b06269739a23a10
                     for field, user_values in demographics.items():
                         if field == 'other_groups':
                             continue
@@ -151,9 +179,14 @@ def query_bills_by_demographics(demographics):
                     'affected_populations_summary': bill_data.get('demographics', ''),
                     'categorized_populations': bill_data.get('demographics', ''),
                     'population_affect_summary': bill_data.get('population affect summary', 'No population analysis available'),
+<<<<<<< HEAD
                     'bill_number': bill_id,
                     'topic_icon': topic,
                     'topic_icon_file': topic_icon_file
+=======
+                    'bill_number': bill_id, 
+                    'xml link': bill_data.get('xml link', '')
+>>>>>>> 6b22d1b9be4a6706758b586a8b06269739a23a10
                 })
                 
                 if len(matching_bills) >= 10:
@@ -206,8 +239,12 @@ def get_top_10_bills():
                 'categorized_populations': bill_data.get('demographics', ''),
                 'population_affect_summary': bill_data.get('population affect summary', 'No population analysis available'),
                 'bill_number': bill_id,
+<<<<<<< HEAD
                 'topic_icon': topic,
                 'topic_icon_file': topic_icon_file
+=======
+                'xml link': bill_data.get('xml link', '')
+>>>>>>> 6b22d1b9be4a6706758b586a8b06269739a23a10
             })
         
         print(f"Total bills found: {bill_count}")
@@ -325,10 +362,10 @@ Income:
 $0-11,600, $11,601-47,150, $47,151-100,525, $100,526+
 
 Race:
-White, Black, Asian, Other
+Hispanic or Latino, White (not Hispanic or Latino), Black or African American, Asian, American Indian or Alaska Native, Native Hawaiian or Other Pacific Islander
 
 Location:
-Urban, Rural, National
+Alabama, Alaska, Arizona, Arkansas, California, Colorado, Connecticut, Delaware, Florida, Georgia, Hawaii, Idaho, Illinois, Indiana, Iowa, Kansas, Kentucky, Louisiana, Maine, Maryland, Massachusetts, Michigan, Minnesota, Mississippi, Missouri, Montana, Nebraska, Nevada, New Hampshire, New Jersey, New Mexico, New York, North Carolina, North Dakota, Ohio, Oklahoma, Oregon, Pennsylvania, Rhode Island, South Carolina, South Dakota, Tennessee, Texas, Utah, Vermont, Virginia, Washington, West Virginia, Wisconsin, Wyoming
 
 Gender:
 Male, Female, Other
@@ -428,11 +465,103 @@ def get_data():
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
+# @app.route('/api/demographics', methods=['POST'])
+# def submit_demographics():
+#     """Endpoint for submitting demographic data"""
+#     try:
+#         # For now, just return success - you can implement storage later
+#         return jsonify({"success": True, "message": "Demographics submitted successfully"})
+#     except Exception as e:
+#         return jsonify({"error": str(e)}), 500
+    
+
 @app.route('/api/demographics', methods=['POST'])
 def submit_demographics():
     """Endpoint for submitting demographic data"""
     try:
+<<<<<<< HEAD
         return jsonify({"success": True, "message": "Demographics submitted successfully"})
+=======
+        data = request.get_json()
+        user_id = data.get('user_id')
+        email = data.get('email')
+        demographics = data.get('demographics', {})
+        
+        if user_id:
+            # Store in Firestore users collection
+            user_doc = db.collection('users').document(user_id)
+            user_doc.set({
+                'email': email,
+                'demographics': demographics,
+                'created_at': datetime.now(),
+                'updated_at': datetime.now()
+            }, merge=True)
+            
+            return jsonify({
+                "success": True, 
+                "message": "Demographics saved successfully"
+            })
+        else:
+            return jsonify({"error": "User ID required"}), 400
+            
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/debug', methods=['GET'])
+def debug_demographics():
+    """Debug endpoint to test demographic matching"""
+    try:
+        # Get first few bills to test demographic parsing
+        bills_ref = db.collection('bills')
+        bills = bills_ref.limit(5).stream()
+        
+        results = []
+        for bill_doc in bills:
+            bill_data = bill_doc.to_dict()
+            bill_id = bill_doc.id
+            
+            categorized_data = bill_data.get('demographics')
+            
+            result = {
+                "bill_id": bill_id,
+                "title": bill_data.get('title', 'No title'),
+                "demographics_type": str(type(categorized_data)),
+                "demographics_content": categorized_data
+            }
+            
+            # Try to parse demographics
+            bill_demographics = None
+            if categorized_data:
+                if isinstance(categorized_data, str):
+                    try:
+                        import json
+                        bill_demographics = json.loads(categorized_data)
+                    except json.JSONDecodeError:
+                        import re
+                        json_match = re.search(r'\{.*\}', categorized_data, re.DOTALL)
+                        if json_match:
+                            try:
+                                bill_demographics = json.loads(json_match.group())
+                            except json.JSONDecodeError:
+                                pass
+                elif isinstance(categorized_data, dict):
+                    bill_demographics = categorized_data
+            
+            result["parsed_demographics"] = bill_demographics
+            
+            # Test matching
+            test_demographics = {"age_groups": ["19-25"]}
+            if bill_demographics and "age_groups" in bill_demographics:
+                bill_age_groups = bill_demographics["age_groups"]
+                user_age_groups = test_demographics["age_groups"]
+                result["test_match"] = any(value in bill_age_groups for value in user_age_groups)
+                result["bill_age_groups"] = bill_age_groups
+                result["user_age_groups"] = user_age_groups
+            
+            results.append(result)
+        
+        return jsonify({"bills": results})
+>>>>>>> 6b22d1b9be4a6706758b586a8b06269739a23a10
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
