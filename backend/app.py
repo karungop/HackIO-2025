@@ -201,6 +201,42 @@ def get_bill_summary(congress, bill_type, bill_number):
     latest_summary = summaries[0].get("text", "")
     return latest_summary
 
+def get_bill_xml(congress, bill_type, bill_number):
+    CONGRESS_API_BASE = "https://api.congress.gov/v3"
+    url = f"{CONGRESS_API_BASE}/bill/{congress}/{bill_type.lower()}/{bill_number}/text"
+    params = {
+        "format": "json",
+        "api_key": os.getenv("CONGRESS_API_KEY")
+    }
+    response = requests.get(url, params=params)
+    try:
+        response = requests.get(url, params=params)
+        response.raise_for_status()
+    except requests.RequestException as e:
+        print(f"Error fetching bill xml: {e}")
+        return None
+    
+    data = response.json()
+    text_versions = data.get("textVersions", [])
+
+    if not text_versions:
+        print("No text versions found.")
+        return None
+
+    # The first entry is usually the latest
+    latest_version = text_versions[0]
+    formats = latest_version.get("formats", [])
+
+    # Find the "Formatted XML" version
+    xml_format = next((fmt for fmt in formats if fmt.get("type") == "Formatted XML"), None)
+    if not xml_format:
+        print("No XML format found.")
+        return None
+
+    xml_url = xml_format.get("url")
+    return xml_url
+
+
 # Analyze bill description to determine affected populations
 def analyze_bill_population(title, description):
     prompt = f"""Analyze the following bill and identify the specific populations that would be affected by it.
@@ -287,6 +323,7 @@ def analyze_bills():
             
             # Analyze populations
             affected_populations = analyze_bill_population(title, description)
+            
             categorized_populations = categorize_population(affected_populations)
             
             analyzed_bills.append({
@@ -367,7 +404,7 @@ def parse_demographics(raw_text):
         print("Error parsing demographics JSON:", e)
         return None
 
-def add_bill(bill_id, title,original, summary,raw_text, affected_population_summary, latest_action_date):
+def add_bill(bill_id, title,original, summary,raw_text, affected_population_summary, latest_action_date, bill_xml):
     bill_ref = db.collection("bills").document(bill_id)
     print(raw_text)
     demographics = parse_demographics(raw_text)
@@ -381,7 +418,8 @@ def add_bill(bill_id, title,original, summary,raw_text, affected_population_summ
             "date": date,
             "demographics": demographics, 
             "population affect summary": affected_population_summary, 
-            "latest action date":latest_action_date
+            "latest action date":latest_action_date, 
+            "xml link": bill_xml
         })
         print(f"✅ Added bill: {title}")
 
@@ -419,10 +457,16 @@ def test_analyze_bills():
                 bill_type=bill.get('type'),
                 bill_number=bill.get('number')
             )
+
+            bill_xml = get_bill_xml(
+                congress=bill.get('congress'),
+                bill_type=bill.get('type'),
+                bill_number=bill.get('number')
+            )
             # print(summary_text)
             latest_action_date = bill.get("latestAction").get("actionDate")
             
-            # print(f"\nBill Number: {bill.get('number', 'N/A')}")
+            print(f"\nBill Number: {bill.get('number', 'N/A')}")
             # print(f"Title: {title}")
             # print(f"Latest Action: {description}")
             # print(f"Update Date: {bill.get('updateDate', 'N/A')}")
@@ -437,7 +481,7 @@ def test_analyze_bills():
             # print(f"\nCategorized Populations:")
             # print(categorized)
             # print()
-            add_bill(bill.get('number'),title,summary_text, description, categorized, affected_populations, latest_action_date)
+            add_bill(bill.get('number'),title,summary_text, description, categorized, affected_populations, latest_action_date, bill_xml)
     
     except Exception as e:
         print(f"\n Error: {str(e)}")
