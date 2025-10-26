@@ -13,6 +13,8 @@ function MainApp() {
   })
   const [leftOpen, setLeftOpen] = useState(false)
   const [rightOpen, setRightOpen] = useState(false)
+  const [rightPanelExtendedWidth, setRightPanelExtendedWidth] = useState(350) // Extended width beyond default
+  const [isDragging, setIsDragging] = useState(false)
   const { user, logout } = useAuth()
   
   // Popup notification states
@@ -236,6 +238,66 @@ function MainApp() {
     })
   }
 
+  // Drag functionality for extending right panel to the left
+  const handleMouseDown = (e) => {
+    e.preventDefault()
+    setIsDragging(true)
+  }
+
+  const handleMouseMove = (e) => {
+    if (!isDragging) return
+    
+    // Calculate how much to extend to the left
+    const newWidth = window.innerWidth - e.clientX
+    const minWidth = 350 // Original width
+    const maxWidth = Math.min(800, window.innerWidth * 0.8) // Max extension
+    
+    if (newWidth >= minWidth && newWidth <= maxWidth) {
+      setRightPanelExtendedWidth(newWidth)
+    }
+  }
+
+  const handleMouseUp = () => {
+    setIsDragging(false)
+  }
+
+  // Reset panel width when closed
+  const handleRightPanelClose = () => {
+    setRightOpen(false)
+    setRightPanelExtendedWidth(350) // Reset to original width
+  }
+
+  // Reset panel width when opening (to ensure it starts at original size)
+  const handleRightPanelToggle = () => {
+    if (!rightOpen) {
+      // Opening - reset to original width
+      setRightPanelExtendedWidth(350)
+    }
+    setRightOpen(!rightOpen)
+  }
+
+  // Add event listeners for drag functionality
+  useEffect(() => {
+    if (isDragging) {
+      document.addEventListener('mousemove', handleMouseMove)
+      document.addEventListener('mouseup', handleMouseUp)
+      document.body.style.cursor = 'col-resize'
+      document.body.style.userSelect = 'none'
+    } else {
+      document.removeEventListener('mousemove', handleMouseMove)
+      document.removeEventListener('mouseup', handleMouseUp)
+      document.body.style.cursor = ''
+      document.body.style.userSelect = ''
+    }
+
+    return () => {
+      document.removeEventListener('mousemove', handleMouseMove)
+      document.removeEventListener('mouseup', handleMouseUp)
+      document.body.style.cursor = ''
+      document.body.style.userSelect = ''
+    }
+  }, [isDragging])
+
   return (
     <div className="app-layout">
       {/* Header */}
@@ -354,16 +416,20 @@ function MainApp() {
         </main>
 
         {/* Right Side Button */}
-        <button className={`side-button right-side-button ${rightOpen ? 'hidden' : ''}`} onClick={() => setRightOpen(!rightOpen)}>
+        <button className={`side-button right-side-button ${rightOpen ? 'hidden' : ''}`} onClick={handleRightPanelToggle}>
           Assistant
         </button>
 
         {/* Right Accordion Panel */}
-        <div className={`accordion-panel right-accordion ${rightOpen ? 'open' : 'closed'}`}>
+        <div 
+          className={`accordion-panel right-accordion ${rightOpen ? 'open' : 'closed'}`}
+          style={{ width: rightPanelExtendedWidth }}
+        >
+          <div className="drag-handle" onMouseDown={handleMouseDown}></div>
           <div className="accordion-content">
             <div className="accordion-header">
               <h2>Bill Finder Assistant</h2>
-              <button className="close-btn" onClick={() => setRightOpen(false)}>×</button>
+              <button className="close-btn" onClick={handleRightPanelClose}>×</button>
             </div>
             <div className="chatbot-section">
               <div className="chatbot-title">Ask any question</div>
@@ -645,10 +711,33 @@ function MainApp() {
           right: 0;
           transform: translateX(100%);
           border-left: 1px solid rgba(102, 126, 234, 0.1);
+          position: fixed;
+          z-index: 1001;
         }
         
         .right-accordion.open {
           transform: translateX(0);
+        }
+        
+        /* Drag Handle */
+        .drag-handle {
+          position: absolute;
+          left: -5px;
+          top: 0;
+          width: 10px;
+          height: 100%;
+          cursor: col-resize;
+          z-index: 1000;
+          background: transparent;
+          transition: background-color 0.2s ease;
+        }
+        
+        .drag-handle:hover {
+          background: rgba(102, 126, 234, 0.2);
+        }
+        
+        .drag-handle:active {
+          background: rgba(102, 126, 234, 0.4);
         }
         
         .accordion-content {
@@ -893,6 +982,7 @@ function MainApp() {
           gap: 0.75rem;
           padding: 1rem;
           height: 300px;
+          width: 100%;
         }
         
         .message.user {
@@ -927,6 +1017,7 @@ function MainApp() {
           display: flex;
           gap: 0.5rem;
           padding: 1rem;
+          width: 100%;
         }
         
         .chat-input {
