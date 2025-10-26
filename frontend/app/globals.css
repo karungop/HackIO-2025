@@ -325,3 +325,31 @@ a {
 .chat-input-area button:hover {
   background: #0051a2;
 }
+
+.xml-link-container {
+  margin-top: 0.5rem;
+}
+
+.xml-link {
+  display: inline-block;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  text-decoration: none;
+  padding: 0.75rem 1.25rem;
+  border-radius: 8px;
+  font-weight: 500;
+  font-size: 0.9rem;
+  transition: all 0.2s ease;
+  box-shadow: 0 2px 8px rgba(102, 126, 234, 0.3);
+}
+
+.xml-link:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 16px rgba(102, 126, 234, 0.4);
+  text-decoration: none;
+  color: white;
+}
+
+.xml-link:active {
+  transform: translateY(0);
+}
