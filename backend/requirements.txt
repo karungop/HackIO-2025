@@ -7,3 +7,5 @@ firebase_admin==7.1.0
 datetime==5.5
 flask_socketio==5.5.1
 eventlet==0.40.3
+beautifulsoup4==4.14.2
+ET==0.0.2
