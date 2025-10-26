@@ -1,5 +1,4 @@
-import eventlet
-eventlet.monkey_patch()
+
 
 import os
 import requests
@@ -9,8 +8,8 @@ from groq import Groq
 from dotenv import load_dotenv
 
 from chatbot_api import chatbot_bp
-from chatbot_websocket import register_chatbot_websockets
-from flask_socketio import SocketIO
+# from chatbot_websocket import register_chatbot_websockets
+# from flask_socketio import SocketIO
 
 
 import firebase_admin
@@ -29,9 +28,9 @@ load_dotenv()
 
 app = Flask(__name__)
 CORS(app) 
-socketio = SocketIO(app, cors_allowed_origins="*")
+# socketio = SocketIO(app, cors_allowed_origins="*")
 app.register_blueprint(chatbot_bp)
-register_chatbot_websockets(socketio)
+# register_chatbot_websockets(socketio)
  # Enable CORS for frontend-backend communication
 
 # Initialize Groq client
