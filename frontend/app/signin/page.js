@@ -207,95 +207,174 @@ export default function SignIn() {
           min-height: 100vh;
           background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
           padding: 20px;
+          position: relative;
+          overflow: hidden;
+        }
+        
+        .signin-container::before {
+          content: '';
+          position: absolute;
+          top: -50%;
+          left: -50%;
+          width: 200%;
+          height: 200%;
+          background: radial-gradient(circle, rgba(255, 255, 255, 0.1) 0%, transparent 70%);
+          animation: float 6s ease-in-out infinite;
+        }
+        
+        @keyframes float {
+          0%, 100% { transform: translateY(0px) rotate(0deg); }
+          50% { transform: translateY(-20px) rotate(180deg); }
         }
         
         .signin-card {
-          background: white;
-          padding: 2rem;
-          border-radius: 12px;
-          box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
+          background: rgba(255, 255, 255, 0.95);
+          backdrop-filter: blur(20px);
+          padding: 3rem 2.5rem;
+          border-radius: 24px;
+          box-shadow: 
+            0 20px 40px rgba(0, 0, 0, 0.1),
+            0 0 0 1px rgba(255, 255, 255, 0.2),
+            inset 0 1px 0 rgba(255, 255, 255, 0.3);
           width: 100%;
-          max-width: 400px;
+          max-width: 420px;
+          position: relative;
+          z-index: 1;
+          border: 1px solid rgba(255, 255, 255, 0.2);
         }
         
         .signin-title {
           text-align: center;
-          margin-bottom: 2rem;
-          color: #333;
-          font-size: 1.8rem;
-          font-weight: 600;
+          margin-bottom: 2.5rem;
+          color: #1a1a1a;
+          font-size: 2rem;
+          font-weight: 700;
+          background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+          -webkit-background-clip: text;
+          -webkit-text-fill-color: transparent;
+          background-clip: text;
+          letter-spacing: -0.02em;
         }
         
         .signin-form {
           display: flex;
           flex-direction: column;
-          gap: 1.5rem;
+          gap: 1.75rem;
         }
         
         .form-group {
           display: flex;
           flex-direction: column;
-          gap: 0.5rem;
+          gap: 0.75rem;
         }
         
         .form-group label {
-          font-weight: 500;
-          color: #555;
-          font-size: 0.9rem;
+          font-weight: 600;
+          color: #374151;
+          font-size: 0.95rem;
+          letter-spacing: 0.01em;
         }
         
         .form-group input {
-          padding: 0.75rem;
-          border: 2px solid #e1e5e9;
-          border-radius: 8px;
+          padding: 1rem 1.25rem;
+          border: 2px solid rgba(229, 231, 235, 0.8);
+          border-radius: 12px;
           font-size: 1rem;
-          transition: border-color 0.2s;
+          transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+          background: rgba(255, 255, 255, 0.8);
+          backdrop-filter: blur(10px);
+          color: #1a1a1a;
+          font-weight: 500;
+        }
+        
+        .form-group input::placeholder {
+          color: #9ca3af;
+          font-weight: 400;
         }
         
         .form-group input:focus {
           outline: none;
           border-color: #667eea;
+          box-shadow: 
+            0 0 0 4px rgba(102, 126, 234, 0.1),
+            0 4px 12px rgba(102, 126, 234, 0.15);
+          background: rgba(255, 255, 255, 0.95);
+          transform: translateY(-1px);
+        }
+        
+        .form-group input:hover {
+          border-color: rgba(102, 126, 234, 0.5);
+          background: rgba(255, 255, 255, 0.9);
         }
         
         .error-message {
-          background: #fee;
-          color: #c53030;
-          padding: 0.75rem;
-          border-radius: 8px;
+          background: linear-gradient(135deg, rgba(239, 68, 68, 0.1) 0%, rgba(220, 38, 38, 0.1) 100%);
+          color: #dc2626;
+          padding: 1rem 1.25rem;
+          border-radius: 12px;
           font-size: 0.9rem;
-          border: 1px solid #feb2b2;
+          border: 1px solid rgba(239, 68, 68, 0.2);
+          backdrop-filter: blur(10px);
+          font-weight: 500;
         }
         
         .signin-button {
           background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
           color: white;
           border: none;
-          padding: 0.875rem;
-          border-radius: 8px;
-          font-size: 1rem;
+          padding: 1rem 1.5rem;
+          border-radius: 12px;
+          font-size: 1.05rem;
           font-weight: 600;
           cursor: pointer;
-          transition: transform 0.2s, box-shadow 0.2s;
+          transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+          position: relative;
+          overflow: hidden;
+          letter-spacing: 0.01em;
+        }
+        
+        .signin-button::before {
+          content: '';
+          position: absolute;
+          top: 0;
+          left: -100%;
+          width: 100%;
+          height: 100%;
+          background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.2), transparent);
+          transition: left 0.5s;
         }
         
         .signin-button:hover:not(:disabled) {
-          transform: translateY(-1px);
-          box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+          transform: translateY(-2px);
+          box-shadow: 
+            0 8px 25px rgba(102, 126, 234, 0.4),
+            0 0 0 1px rgba(255, 255, 255, 0.1);
+        }
+        
+        .signin-button:hover:not(:disabled)::before {
+          left: 100%;
+        }
+        
+        .signin-button:active:not(:disabled) {
+          transform: translateY(0);
         }
         
         .signin-button:disabled {
           opacity: 0.6;
           cursor: not-allowed;
+          transform: none;
         }
         
         .signin-footer {
           text-align: center;
-          margin-top: 1.5rem;
-          color: #666;
+          margin-top: 2rem;
+          color: #6b7280;
         }
         
         .signin-footer p {
           margin: 0;
+          font-size: 0.95rem;
+          font-weight: 500;
         }
         
         .toggle-button {
@@ -305,11 +384,39 @@ export default function SignIn() {
           cursor: pointer;
           font-weight: 600;
           margin-left: 0.5rem;
-          text-decoration: underline;
+          text-decoration: none;
+          transition: all 0.2s ease;
+          padding: 0.25rem 0.5rem;
+          border-radius: 6px;
         }
         
         .toggle-button:hover {
           color: #764ba2;
+          background: rgba(102, 126, 234, 0.1);
+        }
+        
+        @media (max-width: 480px) {
+          .signin-container {
+            padding: 15px;
+          }
+          
+          .signin-card {
+            padding: 2rem 1.5rem;
+            border-radius: 20px;
+          }
+          
+          .signin-title {
+            font-size: 1.75rem;
+            margin-bottom: 2rem;
+          }
+          
+          .signin-form {
+            gap: 1.5rem;
+          }
+          
+          .form-group input {
+            padding: 0.875rem 1rem;
+          }
         }
       `}</style>
     </div>
