@@ -90,6 +90,48 @@ function MainApp() {
     setShowFullAnalysis(false)
   }
 
+  // Parse demographics data
+  const parseDemographics = (demographicsData) => {
+    if (!demographicsData) return null
+    
+    try {
+      let parsed
+      if (typeof demographicsData === 'string') {
+        parsed = JSON.parse(demographicsData)
+      } else {
+        parsed = demographicsData
+      }
+      return parsed
+    } catch (e) {
+      return null
+    }
+  }
+
+  // Render demographic tags
+  const renderDemographicTags = (demographicsData) => {
+    const demographics = parseDemographics(demographicsData)
+    if (!demographics) return null
+
+    const categories = [
+      { key: 'age_groups', label: 'Age' },
+      { key: 'income_brackets', label: 'Income' },
+      { key: 'race_or_ethnicity', label: 'Race/Ethnicity' },
+      { key: 'location', label: 'Location' },
+      { key: 'gender', label: 'Gender' }
+    ]
+
+    return categories.map(category => {
+      const values = demographics[category.key]
+      if (!values || !Array.isArray(values) || values.length === 0) return null
+      
+      return values.map((value, idx) => (
+        <span key={`${category.key}-${idx}`} className="demographic-tag" data-category={category.key}>
+          <span className="tag-category">{category.label}:</span> {value}
+        </span>
+      ))
+    }).filter(Boolean)
+  }
+
   const fetchData = async () => {
     try {
       // Build query parameters from demographics
@@ -265,6 +307,8 @@ function MainApp() {
   const handleRightPanelClose = () => {
     setRightOpen(false)
     setRightPanelExtendedWidth(350) // Reset to original width
+    // Clear all context selections when closing panel
+    setContextButtonStates({})
   }
 
   // Reset panel width when opening (to ensure it starts at original size)
@@ -334,10 +378,26 @@ function MainApp() {
                 <option>$0-11,600</option><option>$11,601-47,150</option><option>$47,151-100,525</option><option>$100,526+</option>
               </select>
               <select value={demographic.raceEthnicity} onChange={e => setDemographic({ ...demographic, raceEthnicity: e.target.value })}>
-                <option value="">Race or Ethnicity (Optional)</option><option>White</option><option>Black</option><option>Asian</option><option>Other</option>
+                <option value="">Race or Ethnicity (Optional)</option>
+                <option>Hispanic or Latino</option>
+                <option>White (not Hispanic or Latino)</option>
+                <option>Black or African American</option>
+                <option>Asian</option>
+                <option>American Indian or Alaska Native</option>
+                <option>Native Hawaiian or Other Pacific Islander</option>
               </select>
               <select value={demographic.location} onChange={e => setDemographic({ ...demographic, location: e.target.value })}>
-                <option value="">Location (Optional)</option><option>Urban</option><option>Rural</option><option>National</option>
+                <option value="">Location (Optional)</option>
+                <option>Alabama</option><option>Alaska</option><option>Arizona</option><option>Arkansas</option><option>California</option>
+                <option>Colorado</option><option>Connecticut</option><option>Delaware</option><option>Florida</option><option>Georgia</option>
+                <option>Hawaii</option><option>Idaho</option><option>Illinois</option><option>Indiana</option><option>Iowa</option>
+                <option>Kansas</option><option>Kentucky</option><option>Louisiana</option><option>Maine</option><option>Maryland</option>
+                <option>Massachusetts</option><option>Michigan</option><option>Minnesota</option><option>Mississippi</option><option>Missouri</option>
+                <option>Montana</option><option>Nebraska</option><option>Nevada</option><option>New Hampshire</option><option>New Jersey</option>
+                <option>New Mexico</option><option>New York</option><option>North Carolina</option><option>North Dakota</option><option>Ohio</option>
+                <option>Oklahoma</option><option>Oregon</option><option>Pennsylvania</option><option>Rhode Island</option><option>South Carolina</option>
+                <option>South Dakota</option><option>Tennessee</option><option>Texas</option><option>Utah</option><option>Vermont</option>
+                <option>Virginia</option><option>Washington</option><option>West Virginia</option><option>Wisconsin</option><option>Wyoming</option>
               </select>
               <select value={demographic.gender} onChange={e => setDemographic({ ...demographic, gender: e.target.value })}>
                 <option value="">Gender (Optional)</option><option>Male</option><option>Female</option><option>Other</option>
@@ -404,10 +464,15 @@ function MainApp() {
                 <div className="card-actions">
                   <button onClick={() => openBillModal(item)} className="details-button">Details</button>
                   <button 
-                    onClick={() => handleAddContextClick(item.id)} 
+                    onClick={() => {
+                      handleAddContextClick(item.id)
+                      if (!rightOpen) {
+                        handleRightPanelToggle()
+                      }
+                    }}
                     className={`add-context-button ${contextButtonStates[item.id] ? 'clicked' : ''}`}
                   >
-                    {contextButtonStates[item.id] ? 'Added' : 'Add Context'}
+                    {contextButtonStates[item.id] ? 'Chat' : 'Open Chat'}
                   </button>
                 </div>
               </div>
@@ -415,10 +480,6 @@ function MainApp() {
           </div>
         </main>
 
-        {/* Right Side Button */}
-        <button className={`side-button right-side-button ${rightOpen ? 'hidden' : ''}`} onClick={handleRightPanelToggle}>
-          Assistant
-        </button>
 
         {/* Right Accordion Panel */}
         <div 
@@ -514,6 +575,14 @@ function MainApp() {
                   <strong>Description:</strong>
                   <p className="bill-description">{selectedBill.description}</p>
                 </div>
+                {selectedBill.categorized_populations && (
+                  <div className="bill-detail-item">
+                    <strong>Demographic Categories:</strong>
+                    <div className="demographic-tags-container">
+                      {renderDemographicTags(selectedBill.categorized_populations)}
+                    </div>
+                  </div>
+                )}
               </div>
               
               <div className="population-analysis-section">
@@ -855,6 +924,8 @@ function MainApp() {
           box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
           border: 1px solid rgba(0, 0, 0, 0.05);
           transition: all 0.2s ease;
+          display: flex;
+          flex-direction: column;
         }
         
         .data-card:hover {
@@ -889,7 +960,7 @@ function MainApp() {
         .card-actions {
           display: flex;
           gap: 0.75rem;
-          margin-top: 0.75rem;
+          margin-top: auto;
           align-items: center;
           justify-content: space-between;
         }
@@ -1446,6 +1517,32 @@ function MainApp() {
         
         .add-context-button.clicked:hover {
           color: #5a67d8;
+        }
+        
+        /* Demographic Tags */
+        .demographic-tags-container {
+          display: flex;
+          flex-wrap: wrap;
+          gap: 0.5rem;
+          margin-top: 0.75rem;
+        }
+        
+        .demographic-tag {
+          background: linear-gradient(135deg, rgba(102, 126, 234, 0.1) 0%, rgba(118, 75, 162, 0.1) 100%);
+          color: #667eea;
+          padding: 0.5rem 0.75rem;
+          border-radius: 6px;
+          font-size: 0.85rem;
+          font-weight: 500;
+          border: 1px solid rgba(102, 126, 234, 0.2);
+          display: inline-flex;
+          align-items: center;
+          gap: 0.5rem;
+        }
+        
+        .tag-category {
+          font-weight: 600;
+          opacity: 0.8;
         }
         
       `}</style>
