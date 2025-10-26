@@ -205,7 +205,7 @@ Please identify and categorize the affected populations into these brackets:
 Provide a concise summary of which populations are primarily affected and how."""
 
     response = groq_client.chat.completions.create(
-        model="llama-3.3-70b-versatile",
+        model="llama-3.1-8b-instant",
         messages=[{"role": "user", "content": prompt}]
     )
     return response.choices[0].message.content
@@ -250,7 +250,7 @@ Return ONLY a JSON object like this (use empty arrays if none apply):
 }}
 """
     response = groq_client.chat.completions.create(
-        model="llama-3.3-70b-versatile",
+        model="llama-3.1-8b-instant",
         messages=[{"role": "user", "content": prompt}]
     )
     return response.choices[0].message.content
@@ -355,9 +355,11 @@ def parse_demographics(raw_text):
         print("Error parsing demographics JSON:", e)
         return None
 
-def add_bill(bill_id, title,original, summary,raw_text):
+def add_bill(bill_id, title,original, summary,raw_text, affected_population_summary, latest_action_date):
     bill_ref = db.collection("bills").document(bill_id)
-    demographics = parse_demographics(raw_text)
+    # print(raw_text)
+    # demographics = parse_demographics(raw_text)
+    demographics = raw_text
     date = datetime.now()
     if(original != None):
         bill_ref.set({
@@ -365,7 +367,9 @@ def add_bill(bill_id, title,original, summary,raw_text):
             "original":original,
             "summary": summary,
             "date": date,
-            "demographics": demographics
+            "demographics": demographics, 
+            "population affect summary": affected_population_summary, 
+            "latest action date":latest_action_date
         })
         print(f"✅ Added bill: {title}")
 
@@ -403,7 +407,8 @@ def test_analyze_bills():
                 bill_type=bill.get('type'),
                 bill_number=bill.get('number')
             )
-            print(summary_text)
+            # print(summary_text)
+            latest_action_date = bill.get("latestAction").get("actionDate")
             
             # print(f"\nBill Number: {bill.get('number', 'N/A')}")
             # print(f"Title: {title}")
@@ -420,7 +425,7 @@ def test_analyze_bills():
             # print(f"\nCategorized Populations:")
             # print(categorized)
             # print()
-            add_bill(bill.get('number'),title,summary_text, description, categorized)
+            add_bill(bill.get('number'),title,summary_text, description, categorized, affected_populations, latest_action_date)
     
     except Exception as e:
         print(f"\n Error: {str(e)}")
@@ -429,7 +434,12 @@ def test_analyze_bills():
 
 if __name__ == '__main__':
     # Uncomment to test without running server
-    # test_analyze_bills()
+    test_analyze_bills()
     
     # Run Flask server
-    app.run(debug=True, port=3001, host='0.0.0.0')
+    # app.run(debug=True, port=3001, host='0.0.0.0')
+
+
+
+
+
