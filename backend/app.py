@@ -403,12 +403,42 @@ def get_data():
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
+# @app.route('/api/demographics', methods=['POST'])
+# def submit_demographics():
+#     """Endpoint for submitting demographic data"""
+#     try:
+#         # For now, just return success - you can implement storage later
+#         return jsonify({"success": True, "message": "Demographics submitted successfully"})
+#     except Exception as e:
+#         return jsonify({"error": str(e)}), 500
+    
+
 @app.route('/api/demographics', methods=['POST'])
 def submit_demographics():
     """Endpoint for submitting demographic data"""
     try:
-        # For now, just return success - you can implement storage later
-        return jsonify({"success": True, "message": "Demographics submitted successfully"})
+        data = request.get_json()
+        user_id = data.get('user_id')
+        email = data.get('email')
+        demographics = data.get('demographics', {})
+        
+        if user_id:
+            # Store in Firestore users collection
+            user_doc = db.collection('users').document(user_id)
+            user_doc.set({
+                'email': email,
+                'demographics': demographics,
+                'created_at': datetime.now(),
+                'updated_at': datetime.now()
+            }, merge=True)
+            
+            return jsonify({
+                "success": True, 
+                "message": "Demographics saved successfully"
+            })
+        else:
+            return jsonify({"error": "User ID required"}), 400
+            
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 

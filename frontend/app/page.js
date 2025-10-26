@@ -342,6 +342,27 @@ function MainApp() {
     }
   }, [isDragging])
 
+  useEffect(() => {
+    const loadUserDemographics = async () => {
+      if (user?.uid) {
+        try {
+          const response = await fetch(`http://localhost:3001/api/user-demographics/${user.uid}`)
+          const data = await response.json()
+          
+          if (data.success && data.has_demographics) {
+            setDemographic(data.demographics)
+            // Automatically apply filters if demographics exist
+            fetchData()
+          }
+        } catch (error) {
+          console.error('Error loading user demographics:', error)
+        }
+      }
+    }
+    
+    loadUserDemographics()
+  }, [user])
+
   return (
     <div className="app-layout">
       {/* Header */}
