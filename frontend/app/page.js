@@ -166,18 +166,44 @@ function MainApp() {
     }
   }
 
-  const handleChatSubmit = (e) => {
-    e.preventDefault()
-    if (!chatInput.trim()) return
-    const userMessage = { sender: 'user', text: chatInput.trim() }
-    setChatMessages(prev => [...prev, userMessage])
+  const handleChatSubmit = async (e) => {
+  e.preventDefault()
+  if (!chatInput.trim()) return
+  
+  const userMessage = { sender: 'user', text: chatInput.trim() }
+  setChatMessages(prev => [...prev, userMessage])
+  const currentInput = chatInput.trim()
+  setChatInput('')
 
-    setTimeout(() => {
-      setChatMessages(prev => [...prev, { sender: 'bot', text: "I'm here to help! (Chatbot responses coming soon...)" }])
-    }, 600)
-
-    setChatInput('')
+  try {
+    // Call the REST API endpoint
+    const response = await fetch('http://localhost:3001/api/chatbot/message', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        message: currentInput,
+        context: {
+          user: user?.email,
+          demographics: demographic
+        }
+      })
+    })
+    
+    const data = await response.json()
+    
+    if (data.success) {
+      setChatMessages(prev => [...prev, { sender: 'bot', text: data.response }])
+    } else {
+      throw new Error(data.error || 'Failed to get response')
+    }
+  } catch (error) {
+    console.error('Chat error:', error)
+    setChatMessages(prev => [...prev, { 
+      sender: 'bot', 
+      text: 'Sorry, I encountered an error. Please try again.' 
+    }])
   }
+}
 
   const handleAddContextClick = (billId) => {
     setContextButtonStates(prev => ({

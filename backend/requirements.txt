@@ -5,3 +5,5 @@ requests==2.31.0
 groq==0.33.0
 firebase_admin==7.1.0
 datetime==5.5
+flask_socketio==5.5.1
+eventlet==0.40.3

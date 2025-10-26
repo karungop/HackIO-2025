@@ -1,9 +1,16 @@
+
+
 import os
 import requests
 from flask import Flask, jsonify, request
 from flask_cors import CORS
 from groq import Groq
 from dotenv import load_dotenv
+
+from chatbot_api import chatbot_bp
+# from chatbot_websocket import register_chatbot_websockets
+# from flask_socketio import SocketIO
+
 
 import firebase_admin
 from firebase_admin import credentials, firestore
@@ -20,7 +27,11 @@ db = firestore.client()
 load_dotenv()
 
 app = Flask(__name__)
-CORS(app)  # Enable CORS for frontend-backend communication
+CORS(app) 
+# socketio = SocketIO(app, cors_allowed_origins="*")
+app.register_blueprint(chatbot_bp)
+# register_chatbot_websockets(socketio)
+ # Enable CORS for frontend-backend communication
 
 # Initialize Groq client
 groq_client = Groq(api_key=os.getenv("GROQ_API_KEY"))
@@ -158,7 +169,7 @@ def fetch_recent_bills():
         "X-API-Key": os.getenv("CONGRESS_API_KEY")
     }
     params = {
-        "limit": 2,
+        "limit": 100,
         "sort": "updateDate desc",
         "format": "json"
     }
@@ -204,7 +215,7 @@ Please identify and categorize the affected populations into these brackets:
 - Occupational groups (farmers, healthcare workers, teachers, veterans, etc.)
 - Other demographic groups (students, homeowners, immigrants, disabled persons, etc.)
 
-Provide a concise summary of which populations are primarily affected and how."""
+Provide a concise summary of which populations are primarily affected and how. Do not mention that this is based off the bill title. """
 
     response = groq_client.chat.completions.create(
         model="llama-3.1-8b-instant",
@@ -240,15 +251,14 @@ Male, Female, Other
 Population Analysis:
 {population_analysis}
 
-Return ONLY a JSON object like this (use empty arrays if none apply):
+Return ONLY a JSON object like this (use empty arrays if none apply) Have NO text outside of the json:
 
 {{
     "age_groups": [],
     "income_brackets": [],
     "race_or_ethnicity": [],
     "location": [],
-    "gender": [],
-    "other_groups": []
+    "gender": []
 }}
 """
     response = groq_client.chat.completions.create(
@@ -359,9 +369,9 @@ def parse_demographics(raw_text):
 
 def add_bill(bill_id, title,original, summary,raw_text, affected_population_summary, latest_action_date):
     bill_ref = db.collection("bills").document(bill_id)
-    # print(raw_text)
-    # demographics = parse_demographics(raw_text)
-    demographics = raw_text
+    print(raw_text)
+    demographics = parse_demographics(raw_text)
+    # demographics = raw_text
     date = datetime.now()
     if(original != None):
         bill_ref.set({
@@ -394,7 +404,7 @@ def test_analyze_bills():
         print(f"✓ Found {len(bills_data['bills'])} bills")
         
         # Analyze first 2 bills
-        for i, bill in enumerate(bills_data['bills'][:2], 1):
+        for i, bill in enumerate(bills_data['bills'][:], 1):
             print(f"\n{'-' * 80}")
             print(f"BILL {i}")
             print(f"{'-' * 80}")
@@ -420,7 +430,7 @@ def test_analyze_bills():
             # print("\n2. Analyzing affected populations with Groq AI...")
             affected_populations = analyze_bill_population(title, description)
             # print(f"\nAffected Populations Analysis:")
-            # print(affected_populations)
+            print(affected_populations)
             
             # print("\n3. Categorizing populations...")
             categorized = categorize_population(affected_populations)
@@ -440,6 +450,7 @@ if __name__ == '__main__':
     
     # Run Flask server
     app.run(debug=True, port=3001, host='0.0.0.0')
+    # socketio.run(app, debug=True, port=3001, host='0.0.0.0')
 
 
 
