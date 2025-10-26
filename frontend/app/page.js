@@ -64,16 +64,44 @@ function MainApp() {
     if (demographic.reasoning.trim()) payload.Reasoning = demographic.reasoning
     
     try {
+      // Submit demographics
       await fetch('http://localhost:3001/api/demographics', {
         method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload)
       })
-      alert('Demographic submitted! Refreshing data...')
-      // Refresh data with new demographics
+      
+      // Immediately refresh data with current demographic state
       setLoading(true)
-      await fetchData()
+      console.log('Refreshing data with demographics:', demographic)
+      
+      // Build query parameters from current demographics
+      const params = new URLSearchParams()
+      if (demographic.ageGroup) params.append('age_groups', demographic.ageGroup)
+      if (demographic.incomeBracket) params.append('income_brackets', demographic.incomeBracket)
+      if (demographic.raceEthnicity) params.append('race_or_ethnicity', demographic.raceEthnicity)
+      if (demographic.location) params.append('location', demographic.location)
+      if (demographic.gender) params.append('gender', demographic.gender)
+      if (demographic.otherGroups) {
+        const groups = demographic.otherGroups.split(',').map(g => g.trim()).filter(Boolean)
+        if (groups.length > 0) params.append('other_groups', groups.join(','))
+      }
+      
+      const url = `http://localhost:3001/api/data${params.toString() ? '?' + params.toString() : ''}`
+      console.log('Fetching from URL:', url)
+      
+      const res = await fetch(url)
+      if (!res.ok) throw new Error('Failed to fetch')
+      const result = await res.json()
+      
+      console.log('Received data:', result)
+      setData(result.data)
+      setError(null)
+      
+      alert('Filters applied! Data refreshed.')
     } catch (err) { 
       console.error('Error submitting demographic:', err)
       alert('Error submitting demographic: ' + err.message) 
+    } finally {
+      setLoading(false)
     }
   }
 
@@ -140,21 +168,58 @@ function MainApp() {
                 </select>
                 <input type="text" placeholder="Other Groups" value={demographic.otherGroups} onChange={e => setDemographic({ ...demographic, otherGroups: e.target.value })} />
                 <textarea placeholder="Reasoning" value={demographic.reasoning} onChange={e => setDemographic({ ...demographic, reasoning: e.target.value })} />
-                <button type="submit" className="form-button">Apply Filters</button>
+                <div style={{ display: 'flex', gap: '10px' }}>
+                  <button type="submit" className="form-button">Apply Filters</button>
+                  <button type="button" className="form-button" onClick={() => {
+                    setDemographic({
+                      ageGroup: '', incomeBracket: '', raceEthnicity: '', location: '', gender: '', otherGroups: '', reasoning: ''
+                    })
+                    setLoading(true)
+                    fetchData()
+                  }} style={{ background: '#666' }}>Clear Filters</button>
+                </div>
               </form>
             </div>
           )}
         </aside>
 
-        {/* Middle Feed */}
-        <main className="panel middle-panel">
+      {/* Middle Feed */}
+      <main className="panel middle-panel">
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
           <h2>Bill Feed</h2>
-          {loading && <p className="loading">Loading...</p>}
-          {error && <p className="error">{error}</p>}
+          {Object.values(demographic).some(value => value && value.trim()) && (
+            <div style={{ 
+              background: '#e3f2fd', 
+              padding: '0.5rem 1rem', 
+              borderRadius: '20px', 
+              fontSize: '0.9rem',
+              color: '#1976d2'
+            }}>
+              Filters Active
+            </div>
+          )}
+        </div>
+        {loading && <p className="loading">Loading...</p>}
+        {error && <p className="error">{error}</p>}
           <div className="data-grid">
             {data.map(item => (
               <div key={item.id} className="data-card">
                 <h3>{item.title}</h3>
+                <div className="bill-date">
+                  <strong>Latest Action Date:</strong> {item.update_date && item.update_date !== 'N/A' ? 
+                    (() => {
+                      try {
+                        const date = new Date(item.update_date);
+                        return isNaN(date.getTime()) ? item.update_date : date.toLocaleDateString('en-US', {
+                          year: 'numeric',
+                          month: 'long',
+                          day: 'numeric'
+                        });
+                      } catch (e) {
+                        return item.update_date;
+                      }
+                    })() : 'N/A'}
+                </div>
                 <p>{item.description}</p>
                 <button onClick={() => alert('Show modal')} className="form-button">Details</button>
               </div>
@@ -217,6 +282,7 @@ function MainApp() {
         .toggle-btn { background: #0070f3; color: #fff; border: none; padding: 5px 10px; border-radius: 4px; cursor: pointer; }
         .data-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 1rem; }
         .data-card { background: #fff; padding: 1rem; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); border: 1px solid #eaeaea; }
+        .bill-date { font-size: 0.85rem; color: #666; margin: 0.5rem 0; padding: 0.3rem 0.5rem; background: #f8f9fa; border-radius: 4px; border-left: 3px solid #0070f3; }
 
         /* Chatbot */
         .chatbot-title { font-size: 1.4rem; font-weight: 600; margin-bottom: 0.3rem; color: #333; text-align: center; }
