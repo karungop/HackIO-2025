@@ -13,6 +13,8 @@ function MainApp() {
   })
   const [leftOpen, setLeftOpen] = useState(false)
   const [rightOpen, setRightOpen] = useState(false)
+  const [rightPanelExtendedWidth, setRightPanelExtendedWidth] = useState(350) // Extended width beyond default
+  const [isDragging, setIsDragging] = useState(false)
   const { user, logout } = useAuth()
   
   // Popup notification states
@@ -32,12 +34,15 @@ function MainApp() {
   // Add context button state for each bill card
   const [contextButtonStates, setContextButtonStates] = useState({})
   
-  // Context modal state
-  const [isContextModalOpen, setIsContextModalOpen] = useState(false)
-  
   // Get list of added context cards
   const getAddedContextCards = () => {
     return data.filter(item => contextButtonStates[item.id])
+  }
+
+  // Get the currently selected context (since only one can be selected at a time)
+  const getSelectedContext = () => {
+    const selectedCard = data.find(item => contextButtonStates[item.id])
+    return selectedCard || null
   }
 
   useEffect(() => { fetchData() }, [])
@@ -210,11 +215,88 @@ function MainApp() {
 }
 
   const handleAddContextClick = (billId) => {
-    setContextButtonStates(prev => ({
-      ...prev,
-      [billId]: !prev[billId]
-    }))
+    setContextButtonStates(prev => {
+      const isCurrentlySelected = prev[billId]
+      
+      if (isCurrentlySelected) {
+        // If clicking on already selected item, deselect it
+        return {
+          ...prev,
+          [billId]: false
+        }
+      } else {
+        // If clicking on unselected item, select it and deselect all others
+        const newState = {}
+        // First, set all to false
+        Object.keys(prev).forEach(id => {
+          newState[id] = false
+        })
+        // Then set the clicked one to true
+        newState[billId] = true
+        return newState
+      }
+    })
   }
+
+  // Drag functionality for extending right panel to the left
+  const handleMouseDown = (e) => {
+    e.preventDefault()
+    setIsDragging(true)
+  }
+
+  const handleMouseMove = (e) => {
+    if (!isDragging) return
+    
+    // Calculate how much to extend to the left
+    const newWidth = window.innerWidth - e.clientX
+    const minWidth = 350 // Original width
+    const maxWidth = Math.min(800, window.innerWidth * 0.8) // Max extension
+    
+    if (newWidth >= minWidth && newWidth <= maxWidth) {
+      setRightPanelExtendedWidth(newWidth)
+    }
+  }
+
+  const handleMouseUp = () => {
+    setIsDragging(false)
+  }
+
+  // Reset panel width when closed
+  const handleRightPanelClose = () => {
+    setRightOpen(false)
+    setRightPanelExtendedWidth(350) // Reset to original width
+  }
+
+  // Reset panel width when opening (to ensure it starts at original size)
+  const handleRightPanelToggle = () => {
+    if (!rightOpen) {
+      // Opening - reset to original width
+      setRightPanelExtendedWidth(350)
+    }
+    setRightOpen(!rightOpen)
+  }
+
+  // Add event listeners for drag functionality
+  useEffect(() => {
+    if (isDragging) {
+      document.addEventListener('mousemove', handleMouseMove)
+      document.addEventListener('mouseup', handleMouseUp)
+      document.body.style.cursor = 'col-resize'
+      document.body.style.userSelect = 'none'
+    } else {
+      document.removeEventListener('mousemove', handleMouseMove)
+      document.removeEventListener('mouseup', handleMouseUp)
+      document.body.style.cursor = ''
+      document.body.style.userSelect = ''
+    }
+
+    return () => {
+      document.removeEventListener('mousemove', handleMouseMove)
+      document.removeEventListener('mouseup', handleMouseUp)
+      document.body.style.cursor = ''
+      document.body.style.userSelect = ''
+    }
+  }, [isDragging])
 
   return (
     <div className="app-layout">
@@ -334,16 +416,20 @@ function MainApp() {
         </main>
 
         {/* Right Side Button */}
-        <button className={`side-button right-side-button ${rightOpen ? 'hidden' : ''}`} onClick={() => setRightOpen(!rightOpen)}>
+        <button className={`side-button right-side-button ${rightOpen ? 'hidden' : ''}`} onClick={handleRightPanelToggle}>
           Assistant
         </button>
 
         {/* Right Accordion Panel */}
-        <div className={`accordion-panel right-accordion ${rightOpen ? 'open' : 'closed'}`}>
+        <div 
+          className={`accordion-panel right-accordion ${rightOpen ? 'open' : 'closed'}`}
+          style={{ width: rightPanelExtendedWidth }}
+        >
+          <div className="drag-handle" onMouseDown={handleMouseDown}></div>
           <div className="accordion-content">
             <div className="accordion-header">
               <h2>Bill Finder Assistant</h2>
-              <button className="close-btn" onClick={() => setRightOpen(false)}>×</button>
+              <button className="close-btn" onClick={handleRightPanelClose}>×</button>
             </div>
             <div className="chatbot-section">
               <div className="chatbot-title">Ask any question</div>
@@ -366,13 +452,14 @@ function MainApp() {
                 <button type="submit" className="chat-send-button">Send</button>
               </form>
               
-              <div className="context-button-container">
-                <button 
-                  className="context-modal-button"
-                  onClick={() => setIsContextModalOpen(true)}
-                >
-                  View Added Context ({getAddedContextCards().length})
-                </button>
+              <div className="context-status-container">
+                <div className="context-status-text">
+                  {getSelectedContext() ? (
+                    <span className="context-title">{getSelectedContext().title}</span>
+                  ) : (
+                    <span className="no-context">No Context</span>
+                  )}
+                </div>
               </div>
             </div>
           </div>
@@ -469,34 +556,6 @@ function MainApp() {
         </div>
       )}
 
-      {/* Context Modal */}
-      {isContextModalOpen && (
-        <div className="context-modal-overlay" onClick={() => setIsContextModalOpen(false)}>
-          <div className="context-modal-content" onClick={(e) => e.stopPropagation()}>
-            <div className="context-modal-header">
-              <h2>Added Context List</h2>
-              <button className="context-modal-close" onClick={() => setIsContextModalOpen(false)}>×</button>
-            </div>
-            <div className="context-modal-body">
-              {getAddedContextCards().length > 0 ? (
-                <div className="context-list">
-                  {getAddedContextCards().map(card => (
-                    <div key={card.id} className="context-modal-item">
-                      <h3>{card.title}</h3>
-                      <p>{card.description}</p>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <div className="context-empty-state">
-                  <p>No context added yet</p>
-                  <p className="context-empty-subtitle">Add context by clicking "Add Context" on bill cards</p>
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
 
       <style jsx>{`
         * {
@@ -652,10 +711,33 @@ function MainApp() {
           right: 0;
           transform: translateX(100%);
           border-left: 1px solid rgba(102, 126, 234, 0.1);
+          position: fixed;
+          z-index: 1001;
         }
         
         .right-accordion.open {
           transform: translateX(0);
+        }
+        
+        /* Drag Handle */
+        .drag-handle {
+          position: absolute;
+          left: -5px;
+          top: 0;
+          width: 10px;
+          height: 100%;
+          cursor: col-resize;
+          z-index: 1000;
+          background: transparent;
+          transition: background-color 0.2s ease;
+        }
+        
+        .drag-handle:hover {
+          background: rgba(102, 126, 234, 0.2);
+        }
+        
+        .drag-handle:active {
+          background: rgba(102, 126, 234, 0.4);
         }
         
         .accordion-content {
@@ -856,28 +938,32 @@ function MainApp() {
         }
         
         /* Chatbot */
-        .context-button-container {
+        .context-status-container {
           margin-top: 1rem;
           display: flex;
           justify-content: center;
         }
         
-        .context-modal-button {
-          background: #d1d5db;
-          color: #374151;
-          border: none;
-          padding: 0.75rem 1.5rem;
+        .context-status-text {
+          padding: 0.75rem 1rem;
           border-radius: 8px;
-          cursor: pointer;
+          background: rgba(243, 244, 246, 0.8);
+          backdrop-filter: blur(10px);
+          border: 1px solid rgba(229, 231, 235, 0.5);
           font-size: 0.9rem;
           font-weight: 500;
-          transition: all 0.2s ease;
+          text-align: center;
+          min-width: 120px;
         }
         
-        .context-modal-button:hover {
-          background: #9ca3af;
-          transform: translateY(-1px);
-          box-shadow: 0 4px 12px rgba(156, 163, 175, 0.4);
+        .context-title {
+          color: #6b7280;
+          font-style: italic;
+        }
+        
+        .no-context {
+          color: #9ca3af;
+          font-style: italic;
         }
         
         .chatbot-title {
@@ -896,6 +982,7 @@ function MainApp() {
           gap: 0.75rem;
           padding: 1rem;
           height: 300px;
+          width: 100%;
         }
         
         .message.user {
@@ -930,6 +1017,7 @@ function MainApp() {
           display: flex;
           gap: 0.5rem;
           padding: 1rem;
+          width: 100%;
         }
         
         .chat-input {
@@ -1360,159 +1448,6 @@ function MainApp() {
           color: #5a67d8;
         }
         
-        /* Context Modal */
-        .context-modal-overlay {
-          position: fixed;
-          top: 0;
-          left: 0;
-          right: 0;
-          bottom: 0;
-          background: rgba(0, 0, 0, 0.6);
-          backdrop-filter: blur(8px);
-          z-index: 3000;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          padding: 2rem;
-          animation: fadeIn 0.3s ease-out;
-        }
-        
-        .context-modal-content {
-          background: white;
-          border-radius: 16px;
-          box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
-          max-width: 600px;
-          width: 100%;
-          max-height: 80vh;
-          overflow: hidden;
-          animation: modalSlideIn 0.3s ease-out;
-        }
-        
-        .context-modal-header {
-          display: flex;
-          justify-content: space-between;
-          align-items: center;
-          padding: 2rem 2rem 1rem 2rem;
-          border-bottom: 1px solid #e5e7eb;
-          background: linear-gradient(135deg, rgba(102, 126, 234, 0.05) 0%, rgba(118, 75, 162, 0.05) 100%);
-        }
-        
-        .context-modal-header h2 {
-          font-size: 1.5rem;
-          font-weight: 700;
-          color: #1a1a1a;
-          margin: 0;
-        }
-        
-        .context-modal-close {
-          background: #f3f4f6;
-          color: #6b7280;
-          border: none;
-          width: 40px;
-          height: 40px;
-          border-radius: 50%;
-          cursor: pointer;
-          font-size: 1.5rem;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          transition: all 0.2s ease;
-        }
-        
-        .context-modal-close:hover {
-          background: #e5e7eb;
-          color: #374151;
-          transform: scale(1.1);
-        }
-        
-        .context-modal-body {
-          padding: 2rem;
-          overflow-y: auto;
-          max-height: calc(80vh - 120px);
-        }
-        
-        .context-list {
-          display: flex;
-          flex-direction: column;
-          gap: 1rem;
-        }
-        
-        .context-modal-item {
-          padding: 1.5rem;
-          background: #f9fafb;
-          border-radius: 12px;
-          border-left: 4px solid #667eea;
-          transition: all 0.2s ease;
-        }
-        
-        .context-modal-item:hover {
-          background: #f3f4f6;
-          transform: translateY(-2px);
-          box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
-        }
-        
-        .context-modal-item h3 {
-          font-size: 1.1rem;
-          font-weight: 600;
-          color: #1a1a1a;
-          margin: 0 0 0.5rem 0;
-          line-height: 1.4;
-        }
-        
-        .context-modal-item p {
-          color: #4b5563;
-          line-height: 1.6;
-          margin: 0;
-          font-size: 0.9rem;
-        }
-        
-        .context-empty-state {
-          text-align: center;
-          padding: 3rem 2rem;
-          color: #6b7280;
-        }
-        
-        .context-empty-state p {
-          font-size: 1.1rem;
-          margin: 0 0 0.5rem 0;
-        }
-        
-        .context-empty-subtitle {
-          font-size: 0.9rem !important;
-          color: #9ca3af !important;
-          font-style: italic;
-        }
-        
-        @media (max-width: 768px) {
-          .context-modal-overlay {
-            padding: 1rem;
-          }
-          
-          .context-modal-content {
-            max-height: 90vh;
-          }
-          
-          .context-modal-header {
-            padding: 1.5rem 1.5rem 1rem 1.5rem;
-          }
-          
-          .context-modal-header h2 {
-            font-size: 1.25rem;
-          }
-          
-          .context-modal-body {
-            padding: 1.5rem;
-            max-height: calc(90vh - 100px);
-          }
-          
-          .context-modal-item {
-            padding: 1rem;
-          }
-          
-          .context-modal-item h3 {
-            font-size: 1rem;
-          }
-        }
       `}</style>
     </div>
   )
