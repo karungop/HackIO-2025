@@ -114,6 +114,7 @@ export default function SignIn() {
           throw new Error('Name is required for sign up')
         }
         await signUp(email, password, name)
+        router.push('/questionnaire')
       } else {
         await signIn(email, password)
       }
