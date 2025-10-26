@@ -1,8 +1,14 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import ProtectedRoute from '../components/ProtectedRoute'
 import { useAuth } from '../contexts/AuthContext'
+import Header from '../components/layout/Header'
+import LeftSidePanel from '../components/layout/LeftSidePanel'
+import RightSidePanel from '../components/layout/RightSidePanel'
+import BillCard from '../components/BillCard'
+import BillModal from '../components/BillModal'
+import PopupNotification from '../components/PopupNotification'
 
 function MainApp() {
   const [data, setData] = useState([])
@@ -64,6 +70,12 @@ function MainApp() {
     }, 3000)
   }
 
+  const getTopicIconPath = (iconFile) => {
+  // iconFile will be like "BallotIcon.png" or "healthcareIcon.webp"
+  // Images are in your public folder at /Images/ (capital I)
+  return `/Images/${iconFile}`
+}
+
   // Function to manually close popup with animation
   const closePopupNotification = () => {
     const popupElement = document.querySelector('.popup-notification')
@@ -114,7 +126,7 @@ function MainApp() {
     finally { setLoading(false) }
   }
 
-  const submitDemographic = async (e) => {
+  const handleDemographicSubmit = async (e) => {
     e.preventDefault()
     
     // Only include non-empty demographic values
@@ -238,13 +250,34 @@ function MainApp() {
     })
   }
 
-  // Drag functionality for extending right panel to the left
+  // Mouse handlers for extending right panel
+  const handleClearFilters = async () => {
+    setDemographic({
+      ageGroup: '', incomeBracket: '', raceEthnicity: '', location: '', gender: ''
+    })
+    setLoading(true)
+    
+    try {
+      const res = await fetch('http://localhost:3001/api/data')
+      if (!res.ok) throw new Error('Failed to fetch')
+      const result = await res.json()
+      setData(result.data)
+      setError(null)
+      showPopupNotification('success', 'Filters cleared! Data refreshed.')
+    } catch (err) {
+      showPopupNotification('error', 'Error clearing filters: ' + err.message)
+    } finally {
+      setLoading(false)
+    }
+  }
+
   const handleMouseDown = (e) => {
     e.preventDefault()
     setIsDragging(true)
   }
 
-  const handleMouseMove = (e) => {
+  // Add useCallback for mouse handlers
+  const handleMouseMove = useCallback((e) => {
     if (!isDragging) return
     
     // Calculate how much to extend to the left
@@ -255,26 +288,20 @@ function MainApp() {
     if (newWidth >= minWidth && newWidth <= maxWidth) {
       setRightPanelExtendedWidth(newWidth)
     }
-  }
+  }, [isDragging])
 
-  const handleMouseUp = () => {
+  const handleMouseUp = useCallback(() => {
     setIsDragging(false)
-  }
-
-  // Reset panel width when closed
-  const handleRightPanelClose = () => {
-    setRightOpen(false)
-    setRightPanelExtendedWidth(350) // Reset to original width
-  }
+  }, [])
 
   // Reset panel width when opening (to ensure it starts at original size)
-  const handleRightPanelToggle = () => {
+  const handleRightPanelToggle = useCallback(() => {
     if (!rightOpen) {
       // Opening - reset to original width
       setRightPanelExtendedWidth(350)
     }
     setRightOpen(!rightOpen)
-  }
+  }, [rightOpen])
 
   // Add event listeners for drag functionality
   useEffect(() => {
@@ -298,262 +325,98 @@ function MainApp() {
     }
   }, [isDragging])
 
+
   return (
     <div className="app-layout">
-      {/* Header */}
-      <header className="app-header">
-        <div className="header-content">
-          <h1>Bill Finder</h1>
-          <div className="user-info">
-            <span>Welcome, {user?.displayName || user?.email}</span>
-            <button onClick={handleSignOut} className="signout-button">Sign Out</button>
-          </div>
-        </div>
-      </header>
+      <Header user={user} onSignOut={handleSignOut} />
       
       <div className="main-content">
-        {/* Left Side Button */}
-        <button className={`side-button left-side-button ${leftOpen ? 'hidden' : ''}`} onClick={() => setLeftOpen(!leftOpen)}>
+        <button 
+          className={`side-button left-side-button ${leftOpen ? 'hidden' : ''}`} 
+          onClick={() => setLeftOpen(!leftOpen)}
+        >
           Filters
         </button>
 
-        {/* Left Accordion Panel */}
-        <div className={`accordion-panel left-accordion ${leftOpen ? 'open' : 'closed'}`}>
-          <div className="accordion-content">
-            <div className="accordion-header">
-              <h2>Filters</h2>
-              <button className="close-btn" onClick={() => setLeftOpen(false)}>×</button>
-            </div>
-            <form onSubmit={submitDemographic} className="form">
-              <select value={demographic.ageGroup} onChange={e => setDemographic({ ...demographic, ageGroup: e.target.value })}>
-                <option value="">Age Group (Optional)</option>
-                <option>0-18</option><option>19-25</option><option>25-40</option><option>41-65</option><option>65+</option>
-              </select>
-              <select value={demographic.incomeBracket} onChange={e => setDemographic({ ...demographic, incomeBracket: e.target.value })}>
-                <option value="">Income Bracket (Optional)</option>
-                <option>$0-11,600</option><option>$11,601-47,150</option><option>$47,151-100,525</option><option>$100,526+</option>
-              </select>
-              <select value={demographic.raceEthnicity} onChange={e => setDemographic({ ...demographic, raceEthnicity: e.target.value })}>
-                <option value="">Race or Ethnicity (Optional)</option><option>White</option><option>Black</option><option>Asian</option><option>Other</option>
-              </select>
-              <select value={demographic.location} onChange={e => setDemographic({ ...demographic, location: e.target.value })}>
-                <option value="">Location (Optional)</option><option>Urban</option><option>Rural</option><option>National</option>
-              </select>
-              <select value={demographic.gender} onChange={e => setDemographic({ ...demographic, gender: e.target.value })}>
-                <option value="">Gender (Optional)</option><option>Male</option><option>Female</option><option>Other</option>
-              </select>
-              <div style={{ display: 'flex', gap: '10px' }}>
-                <button type="submit" className="form-button">Apply Filters</button>
-                <button type="button" className="form-button" onClick={async () => {
-                  setDemographic({
-                    ageGroup: '', incomeBracket: '', raceEthnicity: '', location: '', gender: ''
-                  })
-                  setLoading(true)
-                  
-                  try {
-                    // Fetch data with cleared demographics
-                    const res = await fetch('http://localhost:3001/api/data')
-                    if (!res.ok) throw new Error('Failed to fetch')
-                    const result = await res.json()
-                    setData(result.data)
-                    setError(null)
-                    showPopupNotification('success', 'Filters cleared! Data refreshed.')
-                  } catch (err) {
-                    showPopupNotification('error', 'Error clearing filters: ' + err.message)
-                  } finally {
-                    setLoading(false)
-                  }
-                }} style={{ background: '#666' }}>Clear Filters</button>
-              </div>
-            </form>
-          </div>
-        </div>
+        <LeftSidePanel
+          leftOpen={leftOpen}
+          onClose={() => setLeftOpen(false)}
+          demographic={demographic}
+          setDemographic={setDemographic}
+          onSubmit={handleDemographicSubmit}
+          onClearFilters={handleClearFilters}
+        />
 
-        {/* Middle Feed */}
         <main className="middle-panel">
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
             <h2>Bill Feed</h2>
             {Object.values(demographic).some(value => value && value.trim()) && (
-              <div className="filters-active">
-                Filters Active
-              </div>
+              <div className="filters-active">Filters Active</div>
             )}
           </div>
           {loading && <p className="loading">Loading...</p>}
           {error && <p className="error">{error}</p>}
           <div className="data-grid">
             {data.map(item => (
-              <div key={item.id} className={`data-card ${contextButtonStates[item.id] ? 'context-active' : ''}`}>
-                <h3>{item.title}</h3>
-                <div className="bill-date">
-                  <strong>Latest Action Date:</strong> {item.update_date && item.update_date !== 'N/A' ? 
-                    (() => {
-                      try {
-                        const date = new Date(item.update_date);
-                        return isNaN(date.getTime()) ? item.update_date : date.toLocaleDateString('en-US', {
-                          year: 'numeric',
-                          month: 'long',
-                          day: 'numeric'
-                        });
-                      } catch (e) {
-                        return item.update_date;
-                      }
-                    })() : 'N/A'}
-                </div>
-                <p>{item.description}</p>
-                <div className="card-actions">
-                  <button onClick={() => openBillModal(item)} className="details-button">Details</button>
-                  <button 
-                    onClick={() => handleAddContextClick(item.id)} 
-                    className={`add-context-button ${contextButtonStates[item.id] ? 'clicked' : ''}`}
-                  >
-                    {contextButtonStates[item.id] ? 'Added' : 'Add Context'}
-                  </button>
-                </div>
-              </div>
+              <BillCard
+                key={item.id}
+                bill={item}
+                isContextActive={contextButtonStates[item.id]}
+                onOpenModal={() => {
+                  setSelectedBill(item)
+                  setIsModalOpen(true)
+                }}
+                onAddContext={handleAddContextClick}
+              />
             ))}
           </div>
         </main>
 
-        {/* Right Side Button */}
-        <button className={`side-button right-side-button ${rightOpen ? 'hidden' : ''}`} onClick={handleRightPanelToggle}>
+        <button 
+          className={`side-button right-side-button ${rightOpen ? 'hidden' : ''}`} 
+          onClick={() => {
+            if (!rightOpen) {
+              setRightPanelExtendedWidth(350)
+            }
+            setRightOpen(!rightOpen)
+          }}
+        >
           Assistant
         </button>
 
-        {/* Right Accordion Panel */}
-        <div 
-          className={`accordion-panel right-accordion ${rightOpen ? 'open' : 'closed'}`}
-          style={{ width: rightPanelExtendedWidth }}
-        >
-          <div className="drag-handle" onMouseDown={handleMouseDown}></div>
-          <div className="accordion-content">
-            <div className="accordion-header">
-              <h2>Bill Finder Assistant</h2>
-              <button className="close-btn" onClick={handleRightPanelClose}>×</button>
-            </div>
-            <div className="chatbot-section">
-              <div className="chatbot-title">Ask any question</div>
-              <div className="messages">
-                {chatMessages.map((msg, idx) => (
-                  <div key={idx} className={`message ${msg.sender}`}>
-                    <div className="bubble">{msg.text}</div>
-                  </div>
-                ))}
-              </div>
-
-              <form onSubmit={handleChatSubmit} className="chat-input-area">
-                <input
-                  type="text"
-                  className="chat-input"
-                  placeholder="Type your message..."
-                  value={chatInput}
-                  onChange={(e) => setChatInput(e.target.value)}
-                />
-                <button type="submit" className="chat-send-button">Send</button>
-              </form>
-              
-              <div className="context-status-container">
-                <div className="context-status-text">
-                  {getSelectedContext() ? (
-                    <span className="context-title">{getSelectedContext().title}</span>
-                  ) : (
-                    <span className="no-context">No Context</span>
-                  )}
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
+        <RightSidePanel
+          rightOpen={rightOpen}
+          rightPanelExtendedWidth={rightPanelExtendedWidth}
+          onClose={handleRightPanelToggle}
+          onMouseDown={handleMouseDown}
+          chatMessages={chatMessages}
+          chatInput={chatInput}
+          onChatInputChange={(e) => setChatInput(e.target.value)}
+          onChatSubmit={handleChatSubmit}
+          selectedContext={getSelectedContext()}
+        />
       </div>
 
-      {/* Popup Notification */}
       {popupNotification && (
-        <div className={`popup-notification ${popupNotification.type}`}>
-          <div className="popup-content">
-            <span className="popup-message">{popupNotification.message}</span>
-            <button 
-              className="popup-close" 
-              onClick={closePopupNotification}
-            >
-              ×
-            </button>
-          </div>
-        </div>
+        <PopupNotification
+          type={popupNotification.type}
+          message={popupNotification.message}
+          onClose={closePopupNotification}
+        />
       )}
 
-      {/* Bill Details Modal */}
       {isModalOpen && selectedBill && (
-        <div className="modal-overlay" onClick={closeBillModal}>
-          <div className="modal-content" onClick={(e) => e.stopPropagation()}>
-            <div className="modal-header">
-              <h2 className="modal-title">{selectedBill.title}</h2>
-              <button className="modal-close" onClick={closeBillModal}>×</button>
-            </div>
-            <div className="modal-body">
-              <div className="bill-info-section">
-                <h3>Bill Information</h3>
-                <div className="bill-detail-item">
-                  <strong>Bill Number:</strong> {selectedBill.bill_number}
-                </div>
-                <div className="bill-detail-item">
-                  <strong>Latest Action Date:</strong> {selectedBill.update_date && selectedBill.update_date !== 'N/A' ? 
-                    (() => {
-                      try {
-                        const date = new Date(selectedBill.update_date);
-                        return isNaN(date.getTime()) ? selectedBill.update_date : date.toLocaleDateString('en-US', {
-                          year: 'numeric',
-                          month: 'long',
-                          day: 'numeric'
-                        });
-                      } catch (e) {
-                        return selectedBill.update_date;
-                      }
-                    })() : 'N/A'}
-                </div>
-                <div className="bill-detail-item">
-                  <strong>Description:</strong>
-                  <p className="bill-description">{selectedBill.description}</p>
-                </div>
-              </div>
-              
-              <div className="population-analysis-section">
-                <h3>Population Impact Analysis</h3>
-                <div className="population-content">
-                  {selectedBill.population_affect_summary ? (
-                    <div className="formatted-text">
-                      {(() => {
-                        const fullText = selectedBill.population_affect_summary;
-                        const shouldShowToggle = fullText.length > 200;
-                        
-                        return (
-                          <>
-                            <div className={`analysis-text-container ${showFullAnalysis ? 'expanded' : 'collapsed'}`}>
-                              <p className="analysis-paragraph">
-                                {fullText.replace(/\*/g, '')}
-                              </p>
-                            </div>
-                            {shouldShowToggle && (
-                              <div className="show-more-container">
-                                <span 
-                                  className="show-more-text"
-                                  onClick={() => setShowFullAnalysis(!showFullAnalysis)}
-                                >
-                                  {showFullAnalysis ? 'Show Less' : 'Show More'}
-                                </span>
-                              </div>
-                            )}
-                          </>
-                        );
-                      })()}
-                    </div>
-                  ) : (
-                    <p className="no-analysis">No population impact analysis available for this bill.</p>
-                  )}
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
+        <BillModal
+          isOpen={isModalOpen}
+          bill={selectedBill}
+          showFullAnalysis={showFullAnalysis}
+          onClose={() => {
+            setIsModalOpen(false)
+            setSelectedBill(null)
+            setShowFullAnalysis(false)
+          }}
+          onToggleAnalysis={() => setShowFullAnalysis(!showFullAnalysis)}
+        />
       )}
 
 
@@ -1311,6 +1174,38 @@ function MainApp() {
         .formatted-text {
           line-height: 1.7;
         }
+          .topic-icon-container {
+  position: absolute;
+  top: 1rem;
+  right: 1rem;
+  width: 48px;
+  height: 48px;
+  border-radius: 8px;
+  background: linear-gradient(135deg, rgba(102, 126, 234, 0.1) 0%, rgba(118, 75, 162, 0.1) 100%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 8px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  transition: all 0.2s ease;
+}
+
+.data-card:hover .topic-icon-container {
+  transform: scale(1.05);
+  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
+}
+
+.topic-icon {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.1));
+}
+
+.data-card h3 {
+  margin: 0 60px 0.75rem 0; /* Add right margin to prevent overlap with icon */
+}
+
         
         .analysis-text-container {
           transition: max-height 0.5s ease-in-out;
