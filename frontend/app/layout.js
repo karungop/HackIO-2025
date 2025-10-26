@@ -2,7 +2,7 @@ import './globals.css'
 import { AuthProvider } from '../contexts/AuthContext'
 
 export const metadata = {
-  title: 'Bill Finder App',
+  title: 'For the People App',
   description: 'Next.js frontend application with Firebase authentication',
 }
 

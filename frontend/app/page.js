@@ -27,9 +27,10 @@ function MainApp() {
 
   // Chatbot states
   const [chatMessages, setChatMessages] = useState([
-    { sender: 'bot', text: 'Hi there! I’m your Bill Finder assistant. How can I help?' }
+    { sender: 'bot', text: 'Hi there! I\'m your personal assistant. How can I help?' }
   ])
   const [chatInput, setChatInput] = useState('')
+  const [chatLoading, setChatLoading] = useState(false)
 
   // Add context button state for each bill card
   const [contextButtonStates, setContextButtonStates] = useState({})
@@ -45,7 +46,87 @@ function MainApp() {
     return selectedCard || null
   }
 
-  useEffect(() => { fetchData() }, [])
+  useEffect(() => { 
+    fetchData()
+    loadChatHistory()
+  }, [])
+
+  // Load chat history when component mounts
+  const loadChatHistory = async () => {
+    if (!user?.uid) return
+    
+    try {
+      const response = await fetch(`http://localhost:3001/api/chatbot/load-history?user_id=${user.uid}`)
+      const data = await response.json()
+      
+      if (data.success && data.messages && data.messages.length > 0) {
+        setChatMessages(data.messages)
+      }
+    } catch (error) {
+      console.error('Error loading chat history:', error)
+    }
+  }
+
+  // Save chat history after updating
+  const saveChatHistory = async (messages) => {
+    if (!user?.uid) return
+    
+    try {
+      await fetch('http://localhost:3001/api/chatbot/save-history', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          user_id: user.uid,
+          messages: messages,
+          timestamp: new Date().toISOString()
+        })
+      })
+    } catch (error) {
+      console.error('Error saving chat history:', error)
+    }
+  }
+
+  // Format message text with basic markdown support
+  const formatMessage = (text) => {
+    if (!text) return ''
+    
+    let html = text
+    
+    // Bold text: **text**
+    html = html.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+    
+    // Note: Italic disabled to avoid conflicts with bold markers
+    
+    // Headings
+    html = html.replace(/^### (.*)$/gim, '<h3>$1</h3>')
+    html = html.replace(/^## (.*)$/gim, '<h2>$1</h2>')
+    html = html.replace(/^# (.*)$/gim, '<h2>$1</h2>')
+    
+    // Bullet points (simple implementation)
+    html = html.replace(/^[-•]\s+(.*)$/gm, '<li>$1</li>')
+    
+    // Numbered lists
+    html = html.replace(/^(\d+)\.\s+(.*)$/gm, '<li class="numbered">$1. $2</li>')
+    
+    // Wrap consecutive list items in <ul>
+    html = html.replace(/(<li[^>]*>.*?<\/li>\s*)+/g, (match) => {
+      return '<ul>' + match + '</ul>'
+    })
+    
+    // Convert paragraphs (double newlines)
+    html = html.split(/\n\s*\n/).map(para => {
+      const trimmed = para.trim()
+      if (trimmed && !trimmed.match(/^<(h[1-6]|ul|ol|p|li)/i)) {
+        return '<p>' + trimmed + '</p>'
+      }
+      return trimmed
+    }).join('')
+    
+    // Convert remaining single newlines to <br>
+    html = html.replace(/\n/g, '<br>')
+    
+    return { __html: html }
+  }
 
   // Function to show popup notification
   const showPopupNotification = (type, message) => {
@@ -215,23 +296,25 @@ function MainApp() {
 
   const handleChatSubmit = async (e) => {
   e.preventDefault()
-  if (!chatInput.trim()) return
+  if (!chatInput.trim() || chatLoading) return
   
   const userMessage = { sender: 'user', text: chatInput.trim() }
-  setChatMessages(prev => [...prev, userMessage])
-  const currentInput = chatInput.trim()
+  const updatedMessages = [...chatMessages, userMessage]
+  setChatMessages(updatedMessages)
   setChatInput('')
+  setChatLoading(true)
 
   try {
     // Get the context cards that have been added
     const contextCards = getAddedContextCards()
     
-    // Call the REST API endpoint
+    // Call the REST API endpoint with chat history
     const response = await fetch('http://localhost:3001/api/chatbot/message', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        message: currentInput,
+        message: userMessage.text,
+        chatHistory: chatMessages, // Send full chat history for context
         context: {
           user: user?.email,
           demographics: demographic,
@@ -243,16 +326,23 @@ function MainApp() {
     const data = await response.json()
     
     if (data.success) {
-      setChatMessages(prev => [...prev, { sender: 'bot', text: data.response }])
+      const finalMessages = [...updatedMessages, { sender: 'bot', text: data.response }]
+      setChatMessages(finalMessages)
+      // Save chat history
+      await saveChatHistory(finalMessages)
     } else {
       throw new Error(data.error || 'Failed to get response')
     }
   } catch (error) {
     console.error('Chat error:', error)
-    setChatMessages(prev => [...prev, { 
+    const errorMessages = [...updatedMessages, { 
       sender: 'bot', 
       text: 'Sorry, I encountered an error. Please try again.' 
-    }])
+    }]
+    setChatMessages(errorMessages)
+    await saveChatHistory(errorMessages)
+  } finally {
+    setChatLoading(false)
   }
 }
 
@@ -309,6 +399,35 @@ function MainApp() {
     setRightPanelExtendedWidth(350) // Reset to original width
     // Clear all context selections when closing panel
     setContextButtonStates({})
+    // Reset chat messages to initial state
+    const initialMessage = { sender: 'bot', text: 'Hi there! I\'m your Bill Finder assistant. How can I help?' }
+    setChatMessages([initialMessage])
+    // Clear loading state
+    setChatLoading(false)
+    // Clear chat input
+    setChatInput('')
+    // Clear chat history from Firestore
+    clearChatHistory()
+  }
+
+  // Clear chat history from Firestore
+  const clearChatHistory = async () => {
+    if (!user?.uid) return
+    
+    try {
+      const initialMessage = { sender: 'bot', text: 'Hi there! I\'m your Bill Finder assistant. How can I help?' }
+      await fetch('http://localhost:3001/api/chatbot/save-history', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          user_id: user.uid,
+          messages: [initialMessage],
+          timestamp: new Date().toISOString()
+        })
+      })
+    } catch (error) {
+      console.error('Error clearing chat history:', error)
+    }
   }
 
   // Reset panel width when opening (to ensure it starts at original size)
@@ -368,7 +487,7 @@ function MainApp() {
       {/* Header */}
       <header className="app-header">
         <div className="header-content">
-          <h1>Bill Finder</h1>
+          <h1>For the People</h1>
           <div className="user-info">
             <span>Welcome, {user?.displayName || user?.email}</span>
             <button onClick={handleSignOut} className="signout-button">Sign Out</button>
@@ -453,7 +572,7 @@ function MainApp() {
         {/* Middle Feed */}
         <main className="middle-panel">
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
-            <h2>Bill Feed</h2>
+            <h2>Legislation Feed</h2>
             {Object.values(demographic).some(value => value && value.trim()) && (
               <div className="filters-active">
                 Filters Active
@@ -510,7 +629,7 @@ function MainApp() {
           <div className="drag-handle" onMouseDown={handleMouseDown}></div>
           <div className="accordion-content">
             <div className="accordion-header">
-              <h2>Bill Finder Assistant</h2>
+              <h2>People Assist</h2>
               <button className="close-btn" onClick={handleRightPanelClose}>×</button>
             </div>
             <div className="chatbot-section">
@@ -518,9 +637,18 @@ function MainApp() {
               <div className="messages">
                 {chatMessages.map((msg, idx) => (
                   <div key={idx} className={`message ${msg.sender}`}>
-                    <div className="bubble">{msg.text}</div>
+                    <div className="bubble" dangerouslySetInnerHTML={msg.sender === 'bot' ? formatMessage(msg.text) : { __html: msg.text }} />
                   </div>
                 ))}
+                {chatLoading && (
+                  <div className="message bot">
+                    <div className="bubble typing-indicator">
+                      <span></span>
+                      <span></span>
+                      <span></span>
+                    </div>
+                  </div>
+                )}
               </div>
 
               <form onSubmit={handleChatSubmit} className="chat-input-area">
@@ -530,8 +658,9 @@ function MainApp() {
                   placeholder="Type your message..."
                   value={chatInput}
                   onChange={(e) => setChatInput(e.target.value)}
+                  disabled={chatLoading}
                 />
-                <button type="submit" className="chat-send-button">Send</button>
+                <button type="submit" className="chat-send-button" disabled={chatLoading}>Send</button>
               </form>
               
               <div className="context-status-container">
@@ -1155,9 +1284,19 @@ function MainApp() {
           transition: all 0.2s ease;
         }
         
-        .chat-send-button:hover {
+        .chat-send-button:hover:not(:disabled) {
           transform: translateY(-1px);
           box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+        }
+        
+        .chat-send-button:disabled {
+          opacity: 0.6;
+          cursor: not-allowed;
+        }
+        
+        .chat-input:disabled {
+          background: #f3f4f6;
+          cursor: not-allowed;
         }
         
         @media (max-width: 768px) {

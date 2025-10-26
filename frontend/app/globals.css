@@ -353,3 +353,89 @@ a {
 .xml-link:active {
   transform: translateY(0);
 }
+
+/* Formatted chat message styles */
+.bubble h2 {
+  font-size: 1.1em;
+  font-weight: 600;
+  margin: 0.75em 0 0.5em 0;
+  color: #333;
+}
+
+.bubble h3 {
+  font-size: 1em;
+  font-weight: 600;
+  margin: 0.5em 0 0.5em 0;
+  color: #444;
+}
+
+.bubble p {
+  margin: 0.5em 0;
+  line-height: 1.5;
+}
+
+.bubble ul, .bubble ol {
+  margin: 0.5em 0;
+  padding-left: 1.5em;
+}
+
+.bubble li {
+  margin: 0.25em 0;
+  line-height: 1.4;
+}
+
+.bubble li.numbered {
+  list-style-type: decimal;
+}
+
+.bubble strong {
+  font-weight: 600;
+  color: #333;
+}
+
+.bubble em {
+  font-style: italic;
+}
+
+.bubble br {
+  line-height: 1.5;
+}
+
+/* Typing indicator animation */
+.typing-indicator {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+  padding: 12px 16px;
+}
+
+.typing-indicator span {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background-color: #999;
+  animation: typing 1.4s infinite;
+}
+
+.typing-indicator span:nth-child(1) {
+  animation-delay: 0s;
+}
+
+.typing-indicator span:nth-child(2) {
+  animation-delay: 0.2s;
+}
+
+.typing-indicator span:nth-child(3) {
+  animation-delay: 0.4s;
+}
+
+@keyframes typing {
+  0%, 60%, 100% {
+    transform: translateY(0);
+    opacity: 0.7;
+  }
+  30% {
+    transform: translateY(-10px);
+    opacity: 1;
+  }
+}

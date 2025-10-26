@@ -4,47 +4,25 @@ import os
 from dotenv import load_dotenv
 import requests
 import xml.etree.ElementTree as ET
-from bs4 import BeautifulSoup
 import re
+from datetime import datetime
 
 chatbot_bp = Blueprint('chatbot', __name__)
+
+# This will be set when the blueprint is registered
+_db = None
+
+def init_chatbot_db(db_instance):
+    """Initialize the database instance for the chatbot module"""
+    global _db
+    _db = db_instance
 
 # Initialize Groq client
 load_dotenv()
 groq_client = Groq(api_key=os.getenv("GROQ_API_KEY"))
 
 
-def get_bill_xml_url(congress, bill_type, bill_number):
-    """Get XML URL for a bill from Congress API"""
-    CONGRESS_API_BASE = "https://api.congress.gov/v3"
-    url = f"{CONGRESS_API_BASE}/bill/{congress}/{bill_type.lower()}/{bill_number}/text"
-    params = {
-        "format": "json",
-        "api_key": os.getenv("CONGRESS_API_KEY")
-    }
-    
-    try:
-        response = requests.get(url, params=params)
-        response.raise_for_status()
-        data = response.json()
-        
-        text_versions = data.get("textVersions", [])
-        if not text_versions:
-            return None
-            
-        # Get the latest version
-        latest_version = text_versions[0]
-        formats = latest_version.get("formats", [])
-        
-        # Find the "Formatted XML" version
-        xml_format = next((fmt for fmt in formats if fmt.get("type") == "Formatted XML"), None)
-        if not xml_format:
-            return None
-            
-        return xml_format.get("url")
-    except Exception as e:
-        print(f"Error fetching bill XML URL: {e}")
-        return None
+# Note: get_bill_xml_url() removed - we now use the stored XML link directly from Firestore
     
 def scrape_xml_content(xml_url):
     """Scrape and clean XML content from the bill XML URL"""
@@ -93,17 +71,7 @@ def scrape_xml_content(xml_url):
         print(f"Error scraping XML content: {e}")
         return None
 
-def extract_bill_info_from_id(bill_id):
-    """Extract congress, type, and number from bill ID"""
-    # Assuming bill_id format is like "118hr123" or "118s456"
-    # This might need adjustment based on your actual bill ID format
-    match = re.match(r'(\d+)([a-zA-Z]+)(\d+)', bill_id)
-    if match:
-        congress = match.group(1)
-        bill_type = match.group(2).upper()
-        bill_number = match.group(3)
-        return congress, bill_type, bill_number
-    return None, None, None
+# Note: extract_bill_info_from_id() removed - we now use the stored XML link directly
 
 @chatbot_bp.route('/api/chatbot/message', methods=['POST'])
 def send_message():
@@ -132,14 +100,17 @@ def send_message():
                 title = card.get('title', '')
                 description = card.get('description', '')
                 
-                # Try to get XML content
+                # Try to get XML content from the stored XML link
                 xml_content = None
-                if bill_id:
-                    congress, bill_type, bill_number = extract_bill_info_from_id(bill_id)
-                    if congress and bill_type and bill_number:
-                        xml_url = get_bill_xml_url(congress, bill_type, bill_number)
-                        if xml_url:
-                            xml_content = scrape_xml_content(xml_url)
+                xml_link = card.get('xml link', '')
+                
+                if xml_link:
+                    # Use the stored XML link from Firestore
+                    xml_content = scrape_xml_content(xml_link)
+                    if xml_content is None:
+                        print(f"Failed to scrape XML content for bill {bill_id} from {xml_link}")
+                else:
+                    print(f"No XML link found for bill {bill_id}")
                 
                 # Use XML content if available, otherwise fall back to description
                 if xml_content:
@@ -151,22 +122,53 @@ def send_message():
                     context_str += f"- {title}: {description}\n"
         
         # Create the full prompt with context
-        system_message = f"""You are Bill Finder Assistant, helping users understand legislation and how it affects them.
+        system_message = f"""You are Bill Finder Assistant, a friendly and helpful guide for people who have no background in government or politics. Your goal is to make complex government bills and legislation accessible to everyday people.
+
+IMPORTANT GUIDELINES:
+- Use simple, everyday language. Avoid government jargon and legal terms.
+- If you must use technical terms, immediately explain them in plain language.
+- Break down complex ideas into small, digestible pieces.
+- Use analogies and real-world examples to explain abstract concepts.
+- Structure your responses with clear headings and bullet points for easy reading.
+- Be conversational and warm, like a helpful friend explaining something.
+- Always relate information back to how it affects the person's daily life.
 
 You have access to the following context:
 {context_str}
 
-Provide helpful, accurate information about bills and legislation. If the user asks about specific bills from the context, reference the full bill text provided. Focus on the actual legislative content rather than demographic analysis."""
+When explaining bills:
+1. Start with a simple summary in plain language
+2. Explain what problem this bill is trying to solve (in simple terms)
+3. Break down key points using short paragraphs and bullet points
+4. Explain how this might affect everyday people
+5. Use bold text for important points (wrap in **bold markers**)
+
+Remember: The user doesn't know what "appropriations" means. They don't understand "committee hearings" or "floor votes". Explain things as if talking to a smart friend who knows nothing about government."""
 
         user_prompt = f"{user_message}"
+        
+        # Get chat history if provided
+        chat_history = data.get('chatHistory', [])
+        
+        # Build message history
+        messages = [
+            {"role": "system", "content": system_message}
+        ]
+        
+        # Add chat history (excluding system messages)
+        for msg in chat_history:
+            if msg.get('sender') == 'user':
+                messages.append({"role": "user", "content": msg.get('text', '')})
+            elif msg.get('sender') == 'bot':
+                messages.append({"role": "assistant", "content": msg.get('text', '')})
+        
+        # Add current user message
+        messages.append({"role": "user", "content": user_prompt})
         
         # Generate response using Groq
         response = groq_client.chat.completions.create(
             model="llama-3.1-8b-instant",
-            messages=[
-                {"role": "system", "content": system_message},
-                {"role": "user", "content": user_prompt}
-            ]
+            messages=messages
         )
         
         bot_response = response.choices[0].message.content
@@ -175,5 +177,67 @@ Provide helpful, accurate information about bills and legislation. If the user a
             "success": True,
             "response": bot_response
         })
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@chatbot_bp.route('/api/chatbot/save-history', methods=['POST'])
+def save_chat_history():
+    """Save chat history for a user"""
+    try:
+        data = request.json
+        user_id = data.get('user_id')
+        chat_messages = data.get('messages', [])
+        timestamp = data.get('timestamp', datetime.now())
+        
+        if not user_id:
+            return jsonify({"error": "User ID required"}), 400
+        
+        if _db is None:
+            return jsonify({"error": "Database not initialized"}), 500
+        
+        # Save chat history to Firestore
+        chat_doc = _db.collection('chat_history').document(user_id)
+        chat_doc.set({
+            'messages': chat_messages,
+            'updated_at': timestamp
+        }, merge=True)
+        
+        return jsonify({
+            "success": True,
+            "message": "Chat history saved"
+        })
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@chatbot_bp.route('/api/chatbot/load-history', methods=['GET'])
+def load_chat_history():
+    """Load chat history for a user"""
+    try:
+        user_id = request.args.get('user_id')
+        
+        if not user_id:
+            return jsonify({"error": "User ID required"}), 400
+        
+        if _db is None:
+            return jsonify({"error": "Database not initialized"}), 500
+        
+        # Load chat history from Firestore
+        chat_doc = _db.collection('chat_history').document(user_id).get()
+        
+        if chat_doc.exists:
+            chat_data = chat_doc.to_dict()
+            messages = chat_data.get('messages', [])
+            
+            return jsonify({
+                "success": True,
+                "messages": messages
+            })
+        else:
+            return jsonify({
+                "success": True,
+                "messages": []
+            })
     except Exception as e:
         return jsonify({"error": str(e)}), 500

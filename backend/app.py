@@ -29,6 +29,11 @@ load_dotenv()
 app = Flask(__name__)
 CORS(app) 
 # socketio = SocketIO(app, cors_allowed_origins="*")
+
+# Initialize chatbot with db instance
+from chatbot_api import init_chatbot_db
+init_chatbot_db(db)
+
 app.register_blueprint(chatbot_bp)
 # register_chatbot_websockets(socketio)
  # Enable CORS for frontend-backend communication
