@@ -11,9 +11,17 @@ function MainApp() {
   const [demographic, setDemographic] = useState({
     ageGroup: '', incomeBracket: '', raceEthnicity: '', location: '', gender: ''
   })
-  const [leftOpen, setLeftOpen] = useState(true)
-  const [rightOpen, setRightOpen] = useState(true)
+  const [leftOpen, setLeftOpen] = useState(false)
+  const [rightOpen, setRightOpen] = useState(false)
   const { user, logout } = useAuth()
+  
+  // Popup notification states
+  const [popupNotification, setPopupNotification] = useState(null)
+  
+  // Modal states
+  const [selectedBill, setSelectedBill] = useState(null)
+  const [isModalOpen, setIsModalOpen] = useState(false)
+  const [showFullAnalysis, setShowFullAnalysis] = useState(false)
 
   // Chatbot states
   const [chatMessages, setChatMessages] = useState([
@@ -21,7 +29,61 @@ function MainApp() {
   ])
   const [chatInput, setChatInput] = useState('')
 
+  // Add context button state for each bill card
+  const [contextButtonStates, setContextButtonStates] = useState({})
+  
+  // Context modal state
+  const [isContextModalOpen, setIsContextModalOpen] = useState(false)
+  
+  // Get list of added context cards
+  const getAddedContextCards = () => {
+    return data.filter(item => contextButtonStates[item.id])
+  }
+
   useEffect(() => { fetchData() }, [])
+
+  // Function to show popup notification
+  const showPopupNotification = (type, message) => {
+    setPopupNotification({ type, message })
+    setTimeout(() => {
+      // Add fade-out animation before removing
+      const popupElement = document.querySelector('.popup-notification')
+      if (popupElement) {
+        popupElement.style.animation = 'fadeOutSlideDown 0.3s ease-in forwards'
+        setTimeout(() => {
+          setPopupNotification(null)
+        }, 300)
+      } else {
+        setPopupNotification(null)
+      }
+    }, 3000)
+  }
+
+  // Function to manually close popup with animation
+  const closePopupNotification = () => {
+    const popupElement = document.querySelector('.popup-notification')
+    if (popupElement) {
+      popupElement.style.animation = 'fadeOutSlideDown 0.3s ease-in forwards'
+      setTimeout(() => {
+        setPopupNotification(null)
+      }, 300)
+    } else {
+      setPopupNotification(null)
+    }
+  }
+
+  // Function to open bill details modal
+  const openBillModal = (bill) => {
+    setSelectedBill(bill)
+    setIsModalOpen(true)
+  }
+
+  // Function to close bill details modal
+  const closeBillModal = () => {
+    setIsModalOpen(false)
+    setSelectedBill(null)
+    setShowFullAnalysis(false)
+  }
 
   const fetchData = async () => {
     try {
@@ -40,7 +102,10 @@ function MainApp() {
       const result = await res.json()
       setData(result.data)
       setError(null)
-    } catch (err) { setError('Failed to connect to backend.') }
+      showPopupNotification('success', 'Data updated successfully')
+    } catch (err) { 
+      showPopupNotification('error', 'Failed to connect to backend')
+    }
     finally { setLoading(false) }
   }
 
@@ -84,10 +149,10 @@ function MainApp() {
       setData(result.data)
       setError(null)
       
-      alert('Filters applied! Data refreshed.')
+      showPopupNotification('success', 'Filters applied! Data refreshed.')
     } catch (err) { 
       console.error('Error submitting demographic:', err)
-      alert('Error submitting demographic: ' + err.message) 
+      showPopupNotification('error', 'Error submitting demographic: ' + err.message)
     } finally {
       setLoading(false)
     }
@@ -114,6 +179,13 @@ function MainApp() {
     setChatInput('')
   }
 
+  const handleAddContextClick = (billId) => {
+    setContextButtonStates(prev => ({
+      ...prev,
+      [billId]: !prev[billId]
+    }))
+  }
+
   return (
     <div className="app-layout">
       {/* Header */}
@@ -121,7 +193,7 @@ function MainApp() {
         <div className="header-content">
           <h1>Bill Finder</h1>
           <div className="user-info">
-            <span>Welcome, {user?.email}</span>
+            <span>Welcome, {user?.displayName || user?.email}</span>
             <button onClick={handleSignOut} className="signout-button">Sign Out</button>
           </div>
         </div>
@@ -160,12 +232,25 @@ function MainApp() {
               </select>
               <div style={{ display: 'flex', gap: '10px' }}>
                 <button type="submit" className="form-button">Apply Filters</button>
-                <button type="button" className="form-button" onClick={() => {
+                <button type="button" className="form-button" onClick={async () => {
                   setDemographic({
                     ageGroup: '', incomeBracket: '', raceEthnicity: '', location: '', gender: ''
                   })
                   setLoading(true)
-                  fetchData()
+                  
+                  try {
+                    // Fetch data with cleared demographics
+                    const res = await fetch('http://localhost:3001/api/data')
+                    if (!res.ok) throw new Error('Failed to fetch')
+                    const result = await res.json()
+                    setData(result.data)
+                    setError(null)
+                    showPopupNotification('success', 'Filters cleared! Data refreshed.')
+                  } catch (err) {
+                    showPopupNotification('error', 'Error clearing filters: ' + err.message)
+                  } finally {
+                    setLoading(false)
+                  }
                 }} style={{ background: '#666' }}>Clear Filters</button>
               </div>
             </form>
@@ -186,7 +271,7 @@ function MainApp() {
           {error && <p className="error">{error}</p>}
           <div className="data-grid">
             {data.map(item => (
-              <div key={item.id} className="data-card">
+              <div key={item.id} className={`data-card ${contextButtonStates[item.id] ? 'context-active' : ''}`}>
                 <h3>{item.title}</h3>
                 <div className="bill-date">
                   <strong>Latest Action Date:</strong> {item.update_date && item.update_date !== 'N/A' ? 
@@ -204,7 +289,15 @@ function MainApp() {
                     })() : 'N/A'}
                 </div>
                 <p>{item.description}</p>
-                <button onClick={() => alert('Show modal')} className="form-button">Details</button>
+                <div className="card-actions">
+                  <button onClick={() => openBillModal(item)} className="details-button">Details</button>
+                  <button 
+                    onClick={() => handleAddContextClick(item.id)} 
+                    className={`add-context-button ${contextButtonStates[item.id] ? 'clicked' : ''}`}
+                  >
+                    {contextButtonStates[item.id] ? 'Added' : 'Add Context'}
+                  </button>
+                </div>
               </div>
             ))}
           </div>
@@ -224,30 +317,156 @@ function MainApp() {
             </div>
             <div className="chatbot-section">
               <div className="chatbot-title">Ask any question</div>
-              <div className="chatbot-box">
-                <div className="messages">
-                  {chatMessages.map((msg, idx) => (
-                    <div key={idx} className={`message ${msg.sender}`}>
-                      <div className="bubble">{msg.text}</div>
-                    </div>
-                  ))}
-                </div>
+              <div className="messages">
+                {chatMessages.map((msg, idx) => (
+                  <div key={idx} className={`message ${msg.sender}`}>
+                    <div className="bubble">{msg.text}</div>
+                  </div>
+                ))}
+              </div>
 
-                <form onSubmit={handleChatSubmit} className="chat-input-area">
-                  <input
-                    type="text"
-                    className="chat-input"
-                    placeholder="Type your message..."
-                    value={chatInput}
-                    onChange={(e) => setChatInput(e.target.value)}
-                  />
-                  <button type="submit" className="chat-send-button">Send</button>
-                </form>
+              <form onSubmit={handleChatSubmit} className="chat-input-area">
+                <input
+                  type="text"
+                  className="chat-input"
+                  placeholder="Type your message..."
+                  value={chatInput}
+                  onChange={(e) => setChatInput(e.target.value)}
+                />
+                <button type="submit" className="chat-send-button">Send</button>
+              </form>
+              
+              <div className="context-button-container">
+                <button 
+                  className="context-modal-button"
+                  onClick={() => setIsContextModalOpen(true)}
+                >
+                  View Added Context ({getAddedContextCards().length})
+                </button>
               </div>
             </div>
           </div>
         </div>
       </div>
+
+      {/* Popup Notification */}
+      {popupNotification && (
+        <div className={`popup-notification ${popupNotification.type}`}>
+          <div className="popup-content">
+            <span className="popup-message">{popupNotification.message}</span>
+            <button 
+              className="popup-close" 
+              onClick={closePopupNotification}
+            >
+              ×
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Bill Details Modal */}
+      {isModalOpen && selectedBill && (
+        <div className="modal-overlay" onClick={closeBillModal}>
+          <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h2 className="modal-title">{selectedBill.title}</h2>
+              <button className="modal-close" onClick={closeBillModal}>×</button>
+            </div>
+            <div className="modal-body">
+              <div className="bill-info-section">
+                <h3>Bill Information</h3>
+                <div className="bill-detail-item">
+                  <strong>Bill Number:</strong> {selectedBill.bill_number}
+                </div>
+                <div className="bill-detail-item">
+                  <strong>Latest Action Date:</strong> {selectedBill.update_date && selectedBill.update_date !== 'N/A' ? 
+                    (() => {
+                      try {
+                        const date = new Date(selectedBill.update_date);
+                        return isNaN(date.getTime()) ? selectedBill.update_date : date.toLocaleDateString('en-US', {
+                          year: 'numeric',
+                          month: 'long',
+                          day: 'numeric'
+                        });
+                      } catch (e) {
+                        return selectedBill.update_date;
+                      }
+                    })() : 'N/A'}
+                </div>
+                <div className="bill-detail-item">
+                  <strong>Description:</strong>
+                  <p className="bill-description">{selectedBill.description}</p>
+                </div>
+              </div>
+              
+              <div className="population-analysis-section">
+                <h3>Population Impact Analysis</h3>
+                <div className="population-content">
+                  {selectedBill.population_affect_summary ? (
+                    <div className="formatted-text">
+                      {(() => {
+                        const fullText = selectedBill.population_affect_summary;
+                        const shouldShowToggle = fullText.length > 200;
+                        
+                        return (
+                          <>
+                            <div className={`analysis-text-container ${showFullAnalysis ? 'expanded' : 'collapsed'}`}>
+                              <p className="analysis-paragraph">
+                                {fullText.replace(/\*/g, '')}
+                              </p>
+                            </div>
+                            {shouldShowToggle && (
+                              <div className="show-more-container">
+                                <span 
+                                  className="show-more-text"
+                                  onClick={() => setShowFullAnalysis(!showFullAnalysis)}
+                                >
+                                  {showFullAnalysis ? 'Show Less' : 'Show More'}
+                                </span>
+                              </div>
+                            )}
+                          </>
+                        );
+                      })()}
+                    </div>
+                  ) : (
+                    <p className="no-analysis">No population impact analysis available for this bill.</p>
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Context Modal */}
+      {isContextModalOpen && (
+        <div className="context-modal-overlay" onClick={() => setIsContextModalOpen(false)}>
+          <div className="context-modal-content" onClick={(e) => e.stopPropagation()}>
+            <div className="context-modal-header">
+              <h2>Added Context List</h2>
+              <button className="context-modal-close" onClick={() => setIsContextModalOpen(false)}>×</button>
+            </div>
+            <div className="context-modal-body">
+              {getAddedContextCards().length > 0 ? (
+                <div className="context-list">
+                  {getAddedContextCards().map(card => (
+                    <div key={card.id} className="context-modal-item">
+                      <h3>{card.title}</h3>
+                      <p>{card.description}</p>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="context-empty-state">
+                  <p>No context added yet</p>
+                  <p className="context-empty-subtitle">Add context by clicking "Add Context" on bill cards</p>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
       <style jsx>{`
         * {
@@ -555,22 +774,35 @@ function MainApp() {
           margin: 0.75rem 0;
         }
         
-        .data-card button {
+        .card-actions {
+          display: flex;
+          gap: 0.75rem;
+          margin-top: 0.75rem;
+          align-items: center;
+          justify-content: space-between;
+        }
+        
+        .details-button {
           background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
           color: white;
           border: none;
-          padding: 0.5rem 1rem;
+          padding: 0.5rem 0.75rem;
           border-radius: 6px;
           cursor: pointer;
-          font-size: 0.9rem;
+          font-size: 0.85rem;
           font-weight: 500;
           transition: all 0.2s ease;
-          margin-top: 0.75rem;
+          white-space: nowrap;
+          flex-shrink: 0;
         }
         
-        .data-card button:hover {
+        .details-button:hover {
           transform: translateY(-1px);
           box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+        }
+        
+        .data-card.context-active {
+          box-shadow: 0 8px 25px rgba(102, 126, 234, 0.6);
         }
         
         .loading, .error {
@@ -594,22 +826,36 @@ function MainApp() {
         }
         
         /* Chatbot */
+        .context-button-container {
+          margin-top: 1rem;
+          display: flex;
+          justify-content: center;
+        }
+        
+        .context-modal-button {
+          background: #d1d5db;
+          color: #374151;
+          border: none;
+          padding: 0.75rem 1.5rem;
+          border-radius: 8px;
+          cursor: pointer;
+          font-size: 0.9rem;
+          font-weight: 500;
+          transition: all 0.2s ease;
+        }
+        
+        .context-modal-button:hover {
+          background: #9ca3af;
+          transform: translateY(-1px);
+          box-shadow: 0 4px 12px rgba(156, 163, 175, 0.4);
+        }
+        
         .chatbot-title {
           font-size: 1.1rem;
           font-weight: 600;
           margin-bottom: 1rem;
           color: #1a1a1a;
           text-align: center;
-        }
-        
-        .chatbot-box {
-          display: flex;
-          flex-direction: column;
-          height: 400px;
-          background: white;
-          border-radius: 12px;
-          border: 1px solid rgba(0, 0, 0, 0.05);
-          overflow: hidden;
         }
         
         .messages {
@@ -619,6 +865,7 @@ function MainApp() {
           flex-direction: column;
           gap: 0.75rem;
           padding: 1rem;
+          height: 300px;
         }
         
         .message.user {
@@ -653,8 +900,6 @@ function MainApp() {
           display: flex;
           gap: 0.5rem;
           padding: 1rem;
-          border-top: 1px solid #e5e7eb;
-          background: #f9fafb;
         }
         
         .chat-input {
@@ -664,6 +909,8 @@ function MainApp() {
           border-radius: 8px;
           font-size: 0.9rem;
           transition: all 0.2s ease;
+          background: white;
+          color: #000000;
         }
         
         .chat-input:focus {
@@ -723,6 +970,517 @@ function MainApp() {
           
           .accordion-content {
             padding: 1rem;
+          }
+        }
+        
+        /* Popup Notification Styles */
+        .popup-notification {
+          position: fixed;
+          bottom: 2rem;
+          left: 2rem;
+          z-index: 2000;
+          animation: fadeInSlideUp 0.4s ease-out;
+        }
+        
+        .popup-content {
+          display: flex;
+          align-items: center;
+          gap: 0.75rem;
+          padding: 1rem 1.25rem;
+          border-radius: 12px;
+          box-shadow: 0 8px 32px rgba(0, 0, 0, 0.15);
+          backdrop-filter: blur(20px);
+          border: 1px solid rgba(255, 255, 255, 0.2);
+          min-width: 300px;
+          max-width: 400px;
+        }
+        
+        .popup-notification.success .popup-content {
+          background: linear-gradient(135deg, rgba(34, 197, 94, 0.7) 0%, rgba(16, 185, 129, 0.7) 100%);
+          color: white;
+        }
+        
+        .popup-notification.error .popup-content {
+          background: linear-gradient(135deg, rgba(239, 68, 68, 0.95) 0%, rgba(220, 38, 38, 0.95) 100%);
+          color: white;
+        }
+        
+        .popup-message {
+          flex: 1;
+          font-weight: 500;
+          font-size: 0.9rem;
+          line-height: 1.4;
+        }
+        
+        .popup-close {
+          background: rgba(255, 255, 255, 0.2);
+          color: white;
+          border: none;
+          width: 24px;
+          height: 24px;
+          border-radius: 50%;
+          cursor: pointer;
+          font-size: 1rem;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          transition: all 0.2s ease;
+          flex-shrink: 0;
+        }
+        
+        .popup-close:hover {
+          background: rgba(255, 255, 255, 0.3);
+          transform: scale(1.1);
+        }
+        
+        @keyframes fadeInSlideUp {
+          0% {
+            opacity: 0;
+            transform: translateY(100%) scale(0.9);
+          }
+          50% {
+            opacity: 0.8;
+            transform: translateY(-10%) scale(1.02);
+          }
+          100% {
+            opacity: 1;
+            transform: translateY(0) scale(1);
+          }
+        }
+        
+        @keyframes fadeOutSlideDown {
+          0% {
+            opacity: 1;
+            transform: translateY(0) scale(1);
+          }
+          100% {
+            opacity: 0;
+            transform: translateY(100%) scale(0.9);
+          }
+        }
+        
+        @media (max-width: 768px) {
+          .popup-notification {
+            bottom: 1rem;
+            left: 1rem;
+            right: 1rem;
+          }
+          
+          .popup-content {
+            min-width: auto;
+            max-width: none;
+          }
+        }
+        
+        /* Modal Styles */
+        .modal-overlay {
+          position: fixed;
+          top: 0;
+          left: 0;
+          right: 0;
+          bottom: 0;
+          background: rgba(0, 0, 0, 0.6);
+          backdrop-filter: blur(8px);
+          z-index: 3000;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          padding: 2rem;
+          animation: fadeIn 0.3s ease-out;
+        }
+        
+        .modal-content {
+          background: white;
+          border-radius: 16px;
+          box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+          max-width: 800px;
+          width: 100%;
+          max-height: 90vh;
+          overflow: hidden;
+          animation: modalSlideIn 0.3s ease-out;
+        }
+        
+        .modal-header {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          padding: 2rem 2rem 1rem 2rem;
+          border-bottom: 1px solid #e5e7eb;
+          background: linear-gradient(135deg, rgba(102, 126, 234, 0.05) 0%, rgba(118, 75, 162, 0.05) 100%);
+        }
+        
+        .modal-title {
+          font-size: 1.5rem;
+          font-weight: 700;
+          color: #1a1a1a;
+          margin: 0;
+          line-height: 1.3;
+          flex: 1;
+          padding-right: 1rem;
+        }
+        
+        .modal-close {
+          background: #f3f4f6;
+          color: #6b7280;
+          border: none;
+          width: 40px;
+          height: 40px;
+          border-radius: 50%;
+          cursor: pointer;
+          font-size: 1.5rem;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          transition: all 0.2s ease;
+          flex-shrink: 0;
+        }
+        
+        .modal-close:hover {
+          background: #e5e7eb;
+          color: #374151;
+          transform: scale(1.1);
+        }
+        
+        .modal-body {
+          padding: 2rem;
+          overflow-y: auto;
+          max-height: calc(90vh - 120px);
+        }
+        
+        .bill-info-section,
+        .population-analysis-section {
+          margin-bottom: 2rem;
+        }
+        
+        .bill-info-section h3,
+        .population-analysis-section h3 {
+          font-size: 1.25rem;
+          font-weight: 600;
+          color: #1a1a1a;
+          margin: 0 0 1rem 0;
+          padding-bottom: 0.5rem;
+          border-bottom: 2px solid #667eea;
+        }
+        
+        .bill-detail-item {
+          margin-bottom: 1rem;
+          padding: 0.75rem 1rem;
+          background: #f9fafb;
+          border-radius: 8px;
+          border-left: 4px solid #667eea;
+        }
+        
+        .bill-detail-item strong {
+          color: #374151;
+          font-weight: 600;
+          display: block;
+          margin-bottom: 0.25rem;
+        }
+        
+        .bill-description {
+          margin: 0.5rem 0 0 0;
+          color: #4b5563;
+          line-height: 1.6;
+        }
+        
+        .population-content {
+          background: #f9fafb;
+          border-radius: 12px;
+          padding: 1.5rem;
+          border: 1px solid #e5e7eb;
+        }
+        
+        .formatted-text {
+          line-height: 1.7;
+        }
+        
+        .analysis-text-container {
+          transition: max-height 0.5s ease-in-out;
+          overflow: hidden;
+          position: relative;
+        }
+        
+        .analysis-text-container.collapsed {
+          max-height: 5.4em;
+        }
+        
+        .analysis-text-container.expanded {
+          max-height: 1000px;
+        }
+        
+        .analysis-paragraph {
+          margin: 0 0 1rem 0;
+          color: #374151;
+          font-size: 1rem;
+          text-align: left;
+          line-height: 1.8;
+          white-space: pre-wrap;
+          transition: all 0.3s ease;
+          overflow: hidden;
+        }
+        
+        .analysis-paragraph:last-child {
+          margin-bottom: 0;
+        }
+        
+        .no-analysis {
+          color: #6b7280;
+          font-style: italic;
+          text-align: center;
+          padding: 2rem;
+          margin: 0;
+        }
+        
+        .show-more-container {
+          display: flex;
+          justify-content: center;
+          margin-top: 1rem;
+        }
+        
+        .show-more-text {
+          color: #6b7280;
+          cursor: pointer;
+          font-size: 0.9rem;
+          font-weight: 500;
+          transition: all 0.2s ease;
+          user-select: none;
+        }
+        
+        .show-more-text:hover {
+          color: #4b5563;
+        }
+        
+        @keyframes fadeIn {
+          from {
+            opacity: 0;
+          }
+          to {
+            opacity: 1;
+          }
+        }
+        
+        @keyframes modalSlideIn {
+          from {
+            opacity: 0;
+            transform: scale(0.9) translateY(20px);
+          }
+          to {
+            opacity: 1;
+            transform: scale(1) translateY(0);
+          }
+        }
+        
+        @media (max-width: 768px) {
+          .modal-overlay {
+            padding: 1rem;
+          }
+          
+          .modal-content {
+            max-height: 95vh;
+          }
+          
+          .modal-header {
+            padding: 1.5rem 1.5rem 1rem 1.5rem;
+          }
+          
+          .modal-title {
+            font-size: 1.25rem;
+          }
+          
+          .modal-body {
+            padding: 1.5rem;
+            max-height: calc(95vh - 100px);
+          }
+          
+          .bill-info-section h3,
+          .population-analysis-section h3 {
+            font-size: 1.1rem;
+          }
+          
+          .population-content {
+            padding: 1rem;
+          }
+          
+          .analysis-paragraph {
+            font-size: 0.95rem;
+          }
+        }
+        
+        /* Add Context Button */
+        .add-context-button {
+          background: none;
+          color: #666;
+          border: none;
+          padding: 0.5rem 0.75rem;
+          cursor: pointer;
+          font-weight: 500;
+          font-size: 0.85rem;
+          transition: all 0.3s ease;
+        }
+        
+        .add-context-button:hover {
+          color: #4b5563;
+        }
+        
+        .add-context-button.clicked {
+          color: #667eea;
+        }
+        
+        .add-context-button.clicked:hover {
+          color: #5a67d8;
+        }
+        
+        /* Context Modal */
+        .context-modal-overlay {
+          position: fixed;
+          top: 0;
+          left: 0;
+          right: 0;
+          bottom: 0;
+          background: rgba(0, 0, 0, 0.6);
+          backdrop-filter: blur(8px);
+          z-index: 3000;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          padding: 2rem;
+          animation: fadeIn 0.3s ease-out;
+        }
+        
+        .context-modal-content {
+          background: white;
+          border-radius: 16px;
+          box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+          max-width: 600px;
+          width: 100%;
+          max-height: 80vh;
+          overflow: hidden;
+          animation: modalSlideIn 0.3s ease-out;
+        }
+        
+        .context-modal-header {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          padding: 2rem 2rem 1rem 2rem;
+          border-bottom: 1px solid #e5e7eb;
+          background: linear-gradient(135deg, rgba(102, 126, 234, 0.05) 0%, rgba(118, 75, 162, 0.05) 100%);
+        }
+        
+        .context-modal-header h2 {
+          font-size: 1.5rem;
+          font-weight: 700;
+          color: #1a1a1a;
+          margin: 0;
+        }
+        
+        .context-modal-close {
+          background: #f3f4f6;
+          color: #6b7280;
+          border: none;
+          width: 40px;
+          height: 40px;
+          border-radius: 50%;
+          cursor: pointer;
+          font-size: 1.5rem;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          transition: all 0.2s ease;
+        }
+        
+        .context-modal-close:hover {
+          background: #e5e7eb;
+          color: #374151;
+          transform: scale(1.1);
+        }
+        
+        .context-modal-body {
+          padding: 2rem;
+          overflow-y: auto;
+          max-height: calc(80vh - 120px);
+        }
+        
+        .context-list {
+          display: flex;
+          flex-direction: column;
+          gap: 1rem;
+        }
+        
+        .context-modal-item {
+          padding: 1.5rem;
+          background: #f9fafb;
+          border-radius: 12px;
+          border-left: 4px solid #667eea;
+          transition: all 0.2s ease;
+        }
+        
+        .context-modal-item:hover {
+          background: #f3f4f6;
+          transform: translateY(-2px);
+          box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+        }
+        
+        .context-modal-item h3 {
+          font-size: 1.1rem;
+          font-weight: 600;
+          color: #1a1a1a;
+          margin: 0 0 0.5rem 0;
+          line-height: 1.4;
+        }
+        
+        .context-modal-item p {
+          color: #4b5563;
+          line-height: 1.6;
+          margin: 0;
+          font-size: 0.9rem;
+        }
+        
+        .context-empty-state {
+          text-align: center;
+          padding: 3rem 2rem;
+          color: #6b7280;
+        }
+        
+        .context-empty-state p {
+          font-size: 1.1rem;
+          margin: 0 0 0.5rem 0;
+        }
+        
+        .context-empty-subtitle {
+          font-size: 0.9rem !important;
+          color: #9ca3af !important;
+          font-style: italic;
+        }
+        
+        @media (max-width: 768px) {
+          .context-modal-overlay {
+            padding: 1rem;
+          }
+          
+          .context-modal-content {
+            max-height: 90vh;
+          }
+          
+          .context-modal-header {
+            padding: 1.5rem 1.5rem 1rem 1.5rem;
+          }
+          
+          .context-modal-header h2 {
+            font-size: 1.25rem;
+          }
+          
+          .context-modal-body {
+            padding: 1.5rem;
+            max-height: calc(90vh - 100px);
+          }
+          
+          .context-modal-item {
+            padding: 1rem;
+          }
+          
+          .context-modal-item h3 {
+            font-size: 1rem;
           }
         }
       `}</style>

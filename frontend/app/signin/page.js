@@ -5,11 +5,13 @@ import { useAuth } from '../../contexts/AuthContext'
 import { useRouter } from 'next/navigation'
 
 export default function SignIn() {
+  const [name, setName] = useState('')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [isSignUp, setIsSignUp] = useState(false)
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
+  const [loadingTimeout, setLoadingTimeout] = useState(false)
   const { signIn, signUp, user, loading: authLoading } = useAuth()
   const router = useRouter()
 
@@ -20,8 +22,21 @@ export default function SignIn() {
     }
   }, [user, router])
 
+  // Add timeout for loading state to prevent infinite loading
+  useEffect(() => {
+    if (authLoading) {
+      const timeout = setTimeout(() => {
+        setLoadingTimeout(true)
+      }, 5000) // 5 second timeout
+
+      return () => clearTimeout(timeout)
+    } else {
+      setLoadingTimeout(false)
+    }
+  }, [authLoading])
+
   // Show loading while checking authentication
-  if (authLoading) {
+  if (authLoading && !loadingTimeout) {
     return (
       <div className="signin-container">
         <div className="loading-spinner"></div>
@@ -62,6 +77,27 @@ export default function SignIn() {
     )
   }
 
+  // Show timeout message if loading takes too long
+  if (authLoading && loadingTimeout) {
+    return (
+      <div className="signin-container">
+        <div className="signin-card">
+          <h1 className="signin-title">Authentication Timeout</h1>
+          <p style={{ textAlign: 'center', color: '#666', marginBottom: '2rem' }}>
+            Authentication is taking longer than expected. Please try refreshing the page.
+          </p>
+          <button 
+            onClick={() => window.location.reload()} 
+            className="signin-button"
+            style={{ width: '100%' }}
+          >
+            Refresh Page
+          </button>
+        </div>
+      </div>
+    )
+  }
+
   // Don't render signin form if user is authenticated
   if (user) {
     return null
@@ -74,7 +110,10 @@ export default function SignIn() {
 
     try {
       if (isSignUp) {
-        await signUp(email, password)
+        if (!name.trim()) {
+          throw new Error('Name is required for sign up')
+        }
+        await signUp(email, password, name)
       } else {
         await signIn(email, password)
       }
@@ -94,6 +133,19 @@ export default function SignIn() {
         </h1>
         
         <form onSubmit={handleSubmit} className="signin-form">
+          {isSignUp && (
+            <div className="form-group">
+              <label htmlFor="name">Name</label>
+              <input
+                type="text"
+                id="name"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                required={isSignUp}
+                placeholder="Enter your full name"
+              />
+            </div>
+          )}
           <div className="form-group">
             <label htmlFor="email">Email</label>
             <input
