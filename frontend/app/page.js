@@ -176,6 +176,9 @@ function MainApp() {
   setChatInput('')
 
   try {
+    // Get the context cards that have been added
+    const contextCards = getAddedContextCards()
+    
     // Call the REST API endpoint
     const response = await fetch('http://localhost:3001/api/chatbot/message', {
       method: 'POST',
@@ -184,7 +187,8 @@ function MainApp() {
         message: currentInput,
         context: {
           user: user?.email,
-          demographics: demographic
+          demographics: demographic,
+          contextCards: contextCards // Add the context cards here
         }
       })
     })
