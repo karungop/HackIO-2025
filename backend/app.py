@@ -1,5 +1,3 @@
-
-
 import os
 import requests
 from flask import Flask, jsonify, request
@@ -8,9 +6,6 @@ from groq import Groq
 from dotenv import load_dotenv
 
 from chatbot_api import chatbot_bp
-# from chatbot_websocket import register_chatbot_websockets
-# from flask_socketio import SocketIO
-
 
 import firebase_admin
 from firebase_admin import credentials, firestore
@@ -23,18 +18,77 @@ firebase_admin.initialize_app(cred)
 
 db = firestore.client()
 
-
 load_dotenv()
 
 app = Flask(__name__)
 CORS(app) 
-# socketio = SocketIO(app, cors_allowed_origins="*")
 app.register_blueprint(chatbot_bp)
-# register_chatbot_websockets(socketio)
- # Enable CORS for frontend-backend communication
 
 # Initialize Groq client
 groq_client = Groq(api_key=os.getenv("GROQ_API_KEY"))
+
+# Available topic icons - MATCHING YOUR EXACT FILES
+AVAILABLE_TOPICS = {
+    "ballot": "BallotIcon.png",
+    "education": "EducationIcon.png",
+    "energy": "EnergyIcon.png",
+    "environment": "EnvironmentIcon.png",
+    "foreign policy": "ForeignPolicyIcon.webp",
+    "healthcare": "healthcareIcon.webp",
+    "money": "MoneyIcon.png",
+    "technology": "TechnologyIcon.png",
+    "veterans": "VeteransIcon.jpg"
+}
+
+def select_topic_icon(bill_title):
+    """Use Groq AI to select the most relevant topic icon for a bill"""
+    
+    topic_list = ", ".join(AVAILABLE_TOPICS.keys())
+    
+    prompt = f"""Given the following bill title, select the SINGLE most relevant topic from this list:
+{topic_list}
+
+Bill Title: {bill_title}
+
+Categories explained:
+- ballot: voting rights, election laws, democratic process
+- education: schools, colleges, student loans, education policy
+- energy: power generation, oil, gas, renewable energy, electricity
+- environment: climate change, conservation, pollution, natural resources
+- foreign policy: international relations, diplomacy, trade agreements, military aid
+- healthcare: medical care, insurance, hospitals, public health, Medicare/Medicaid
+- money: economy, taxes, budget, financial regulations, banking
+- technology: internet, AI, cybersecurity, tech regulations, telecommunications
+- veterans: military veterans, VA benefits, veteran healthcare
+
+Return ONLY ONE topic name from the list above (lowercase), nothing else. Choose the one that best matches the bill's primary focus."""
+
+    try:
+        response = groq_client.chat.completions.create(
+            model="llama-3.1-8b-instant",
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0.3
+        )
+        
+        selected_topic = response.choices[0].message.content.strip().lower()
+        
+        # Clean up response (remove any extra text)
+        for topic in AVAILABLE_TOPICS.keys():
+            if topic in selected_topic:
+                print(f"✅ Matched '{bill_title}' to topic: {topic}")
+                return topic
+        
+        # Default fallback
+        print(f"⚠️ Could not match topic for '{bill_title}', using default 'money'")
+        return "money"
+            
+    except Exception as e:
+        print(f"❌ Error selecting topic icon: {e}")
+        return "money"
+
+def get_topic_icon_filename(topic):
+    """Get the actual filename for a topic"""
+    return AVAILABLE_TOPICS.get(topic, "MoneyIcon.png")
 
 # Firestore query functions
 def query_bills_by_demographics(demographics):
@@ -43,15 +97,12 @@ def query_bills_by_demographics(demographics):
     Returns up to 10 bills that have at least one matching demographic field.
     """
     try:
-        # Get all bills from Firestore ordered by timestamp (most recent first)
-        # If timestamp doesn't exist, fall back to document ID ordering
         bills_ref = db.collection('bills')
         try:
             bills = bills_ref.order_by('date', direction=firestore.Query.DESCENDING).limit(100).stream()
             print("Using date ordering")
         except Exception as e:
             print(f"Date ordering failed: {e}, using fallback")
-            # Fallback if date field doesn't exist
             bills = bills_ref.limit(100).stream()
         
         matching_bills = []
@@ -62,49 +113,49 @@ def query_bills_by_demographics(demographics):
             
             # Check if bill matches user demographics
             has_match = False
-            if any(demographics.values()):  # If user provided any demographics
+            if any(demographics.values()):
                 if 'demographics' in bill_data and bill_data['demographics']:
                     bill_demographics = bill_data['demographics']
                     
-                    # Check each demographic field for matches (excluding other_groups)
                     for field, user_values in demographics.items():
                         if field == 'other_groups':
-                            continue  # Skip other_groups as requested
+                            continue
                             
                         if field in bill_demographics:
                             bill_values = bill_demographics[field] if isinstance(bill_demographics[field], list) else [bill_demographics[field]]
                             user_values_list = user_values if isinstance(user_values, list) else [user_values]
                             
-                            # Only include bills that have matching demographic data
-                            if bill_values and any(bill_values):  # Check if not empty
+                            if bill_values and any(bill_values):
                                 if any(value in bill_values for value in user_values_list):
                                     has_match = True
                                     break
-                            # If bill has no demographic data for this field, do NOT include it
-                            # (only include bills with specific demographic targeting)
                             else:
                                 has_match = False
                                 break
             else:
-                # If no user demographics, include all bills
                 has_match = True
             
             if has_match:
-                # Use latest action date if available, otherwise use regular date
                 latest_action_date = bill_data.get('latest action date', 'N/A')
+                title = bill_data.get('title', 'No title available')
+                
+                # Select topic icon for this bill
+                topic = select_topic_icon(title)
+                topic_icon_file = get_topic_icon_filename(topic)
                 
                 matching_bills.append({
                     'id': bill_id,
-                    'title': bill_data.get('title', 'No title available'),
+                    'title': title,
                     'description': bill_data.get('summary', 'No description available'),
                     'update_date': latest_action_date,
                     'affected_populations_summary': bill_data.get('demographics', ''),
                     'categorized_populations': bill_data.get('demographics', ''),
                     'population_affect_summary': bill_data.get('population affect summary', 'No population analysis available'),
-                    'bill_number': bill_id
+                    'bill_number': bill_id,
+                    'topic_icon': topic,
+                    'topic_icon_file': topic_icon_file
                 })
                 
-                # Stop at 10 bills
                 if len(matching_bills) >= 10:
                     break
         
@@ -127,7 +178,6 @@ def get_top_10_bills():
             print("Using date ordering")
         except Exception as e:
             print(f"Date ordering failed: {e}, using fallback")
-            # Fallback if date field doesn't exist
             bills = bills_ref.limit(10).stream()
         
         top_bills = []
@@ -139,20 +189,25 @@ def get_top_10_bills():
             bill_id = bill_doc.id
             
             print(f"Found bill {bill_count}: {bill_id}")
-            print(f"Bill data keys: {list(bill_data.keys())}")
             
-            # Use latest action date if available, otherwise use regular date
             latest_action_date = bill_data.get('latest action date') or bill_data.get('date', 'N/A')
+            title = bill_data.get('title', 'No title available')
+            
+            # Select topic icon for this bill
+            topic = select_topic_icon(title)
+            topic_icon_file = get_topic_icon_filename(topic)
             
             top_bills.append({
                 'id': bill_id,
-                'title': bill_data.get('title', 'No title available'),
+                'title': title,
                 'description': bill_data.get('summary', 'No description available'),
                 'update_date': latest_action_date,
                 'affected_populations_summary': bill_data.get('demographics', ''),
                 'categorized_populations': bill_data.get('demographics', ''),
                 'population_affect_summary': bill_data.get('population affect summary', 'No population analysis available'),
-                'bill_number': bill_id
+                'bill_number': bill_id,
+                'topic_icon': topic,
+                'topic_icon_file': topic_icon_file
             })
         
         print(f"Total bills found: {bill_count}")
@@ -183,7 +238,6 @@ def get_bill_summary(congress, bill_type, bill_number):
         "format": "json",
         "api_key": os.getenv("CONGRESS_API_KEY")
     }
-    response = requests.get(url, params=params)
     try:
         response = requests.get(url, params=params)
         response.raise_for_status()
@@ -197,7 +251,6 @@ def get_bill_summary(congress, bill_type, bill_number):
     if not summaries:
         return None
 
-    # Typically the first entry is the latest summary
     latest_summary = summaries[0].get("text", "")
     return latest_summary
 
@@ -208,7 +261,6 @@ def get_bill_xml(congress, bill_type, bill_number):
         "format": "json",
         "api_key": os.getenv("CONGRESS_API_KEY")
     }
-    response = requests.get(url, params=params)
     try:
         response = requests.get(url, params=params)
         response.raise_for_status()
@@ -223,11 +275,9 @@ def get_bill_xml(congress, bill_type, bill_number):
         print("No text versions found.")
         return None
 
-    # The first entry is usually the latest
     latest_version = text_versions[0]
     formats = latest_version.get("formats", [])
 
-    # Find the "Formatted XML" version
     xml_format = next((fmt for fmt in formats if fmt.get("type") == "Formatted XML"), None)
     if not xml_format:
         print("No XML format found.")
@@ -235,7 +285,6 @@ def get_bill_xml(congress, bill_type, bill_number):
 
     xml_url = xml_format.get("url")
     return xml_url
-
 
 # Analyze bill description to determine affected populations
 def analyze_bill_population(title, description):
@@ -251,7 +300,7 @@ Please identify and categorize the affected populations into these brackets:
 - Occupational groups (farmers, healthcare workers, teachers, veterans, etc.)
 - Other demographic groups (students, homeowners, immigrants, disabled persons, etc.)
 
-Provide a concise summary of which populations are primarily affected and how. Do not mention that this is based off the bill title. """
+Provide a concise summary of which populations are primarily affected and how. Do not mention that this is based off the bill title."""
 
     response = groq_client.chat.completions.create(
         model="llama-3.1-8b-instant",
@@ -303,28 +352,27 @@ Return ONLY a JSON object like this (use empty arrays if none apply) Have NO tex
     )
     return response.choices[0].message.content
 
-
-
 @app.route('/api/analyze_bills', methods=['GET'])
 def analyze_bills():
     try:
         bills_data = fetch_recent_bills()
         analyzed_bills = []
 
-        # Check if we got bills back
         if 'bills' not in bills_data:
             return jsonify({"error": "No bills found in API response", "data": bills_data}), 500
 
-        for bill in bills_data['bills'][:2]:  # Limit to 2 bills
+        for bill in bills_data['bills'][:2]:
             title = bill.get('title', 'No title available')
-            # Get the latest action as description if no description field
             latest_action = bill.get('latestAction', {})
             description = latest_action.get('text', 'No description available')
             
             # Analyze populations
             affected_populations = analyze_bill_population(title, description)
-            
             categorized_populations = categorize_population(affected_populations)
+            
+            # Select topic icon
+            topic = select_topic_icon(title)
+            topic_icon_file = get_topic_icon_filename(topic)
             
             analyzed_bills.append({
                 'bill_number': bill.get('number', 'N/A'),
@@ -332,7 +380,9 @@ def analyze_bills():
                 'description': description,
                 'update_date': bill.get('updateDate', 'N/A'),
                 'affected_populations_summary': affected_populations,
-                'categorized_populations': categorized_populations
+                'categorized_populations': categorized_populations,
+                'topic_icon': topic,
+                'topic_icon_file': topic_icon_file
             })
 
         return jsonify({
@@ -351,26 +401,21 @@ def get_data():
     Queries Firestore based on demographics or returns top 10 bills.
     """
     try:
-        # Get demographics from query parameters
         demographics = {}
         demographic_fields = ['age_groups', 'income_brackets', 'race_or_ethnicity', 'location', 'gender', 'other_groups']
         
         for field in demographic_fields:
             value = request.args.get(field)
             if value:
-                # URL decode the value first, then handle comma-separated values
                 import urllib.parse
                 decoded_value = urllib.parse.unquote(value)
                 demographics[field] = [v.strip() for v in decoded_value.split(',') if v.strip()]
         
-        # Check if any demographics are provided
         has_demographics = any(demographics.values())
         
         if has_demographics:
-            # Query bills that match demographics
             bills = query_bills_by_demographics(demographics)
         else:
-            # Get top 10 bills if no demographics
             bills = get_top_10_bills()
         
         return jsonify({
@@ -387,16 +432,43 @@ def get_data():
 def submit_demographics():
     """Endpoint for submitting demographic data"""
     try:
-        # For now, just return success - you can implement storage later
         return jsonify({"success": True, "message": "Demographics submitted successfully"})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
-    
-def parse_demographics(raw_text):
-    # Remove markdown-style ```json and ``` markers
-    clean_text = re.sub(r"```json|```", "", raw_text).strip()
 
-    # Parse as JSON
+@app.route('/api/select-topic', methods=['POST'])
+def select_topic_endpoint():
+    """Standalone endpoint to get topic icon for a bill title"""
+    try:
+        data = request.json
+        bill_title = data.get('title', '')
+        
+        if not bill_title:
+            return jsonify({"error": "No title provided"}), 400
+        
+        topic = select_topic_icon(bill_title)
+        topic_icon_file = get_topic_icon_filename(topic)
+        
+        return jsonify({
+            "success": True,
+            "topic": topic,
+            "icon_file": topic_icon_file
+        })
+        
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/available-topics', methods=['GET'])
+def get_available_topics():
+    """Get list of available topic icons"""
+    return jsonify({
+        "success": True,
+        "topics": list(AVAILABLE_TOPICS.keys()),
+        "icon_files": AVAILABLE_TOPICS
+    })
+
+def parse_demographics(raw_text):
+    clean_text = re.sub(r"```json|```", "", raw_text).strip()
     try:
         data = json.loads(clean_text)
         return data
@@ -404,25 +476,30 @@ def parse_demographics(raw_text):
         print("Error parsing demographics JSON:", e)
         return None
 
-def add_bill(bill_id, title,original, summary,raw_text, affected_population_summary, latest_action_date, bill_xml):
+def add_bill(bill_id, title, original, summary, raw_text, affected_population_summary, latest_action_date, bill_xml):
     bill_ref = db.collection("bills").document(bill_id)
     print(raw_text)
     demographics = parse_demographics(raw_text)
-    # demographics = raw_text
     date = datetime.now()
+    
+    # Select topic icon for the bill
+    topic = select_topic_icon(title)
+    topic_icon_file = get_topic_icon_filename(topic)
+    
     if(original != None):
         bill_ref.set({
             "title": title,
-            "original":original,
+            "original": original,
             "summary": summary,
             "date": date,
             "demographics": demographics, 
             "population affect summary": affected_population_summary, 
-            "latest action date":latest_action_date, 
-            "xml link": bill_xml
+            "latest action date": latest_action_date, 
+            "xml link": bill_xml,
+            "topic_icon": topic,
+            "topic_icon_file": topic_icon_file
         })
-        print(f"✅ Added bill: {title}")
-
+        print(f"✅ Added bill: {title} (Topic: {topic}, Icon: {topic_icon_file})")
 
 # Test function to demonstrate functionality
 def test_analyze_bills():
@@ -431,7 +508,6 @@ def test_analyze_bills():
     print("=" * 80)
     
     try:
-        # Fetch bills
         print("\n1. Fetching recent bills from Congress API...")
         bills_data = fetch_recent_bills()
         
@@ -441,12 +517,10 @@ def test_analyze_bills():
         
         print(f"✓ Found {len(bills_data['bills'])} bills")
         
-        # Analyze first 2 bills
         for i, bill in enumerate(bills_data['bills'][:], 1):
             print(f"\n{'-' * 80}")
             print(f"BILL {i}")
             print(f"{'-' * 80}")
-            # print(bill)
             
             title = bill.get('title', 'No title available')
             latest_action = bill.get('latestAction', {})
@@ -463,25 +537,17 @@ def test_analyze_bills():
                 bill_type=bill.get('type'),
                 bill_number=bill.get('number')
             )
-            # print(summary_text)
+            
             latest_action_date = bill.get("latestAction").get("actionDate")
             
             print(f"\nBill Number: {bill.get('number', 'N/A')}")
-            # print(f"Title: {title}")
-            # print(f"Latest Action: {description}")
-            # print(f"Update Date: {bill.get('updateDate', 'N/A')}")
             
-            # print("\n2. Analyzing affected populations with Groq AI...")
             affected_populations = analyze_bill_population(title, description)
-            # print(f"\nAffected Populations Analysis:")
             print(affected_populations)
             
-            # print("\n3. Categorizing populations...")
             categorized = categorize_population(affected_populations)
-            # print(f"\nCategorized Populations:")
-            # print(categorized)
-            # print()
-            add_bill(bill.get('number'),title,summary_text, description, categorized, affected_populations, latest_action_date, bill_xml)
+            
+            add_bill(bill.get('number'), title, summary_text, description, categorized, affected_populations, latest_action_date, bill_xml)
     
     except Exception as e:
         print(f"\n Error: {str(e)}")
@@ -494,9 +560,3 @@ if __name__ == '__main__':
     
     # Run Flask server
     app.run(debug=True, port=3001, host='0.0.0.0')
-    # socketio.run(app, debug=True, port=3001, host='0.0.0.0')
-
-
-
-
-
