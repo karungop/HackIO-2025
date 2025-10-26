@@ -596,6 +596,21 @@ function MainApp() {
                   <strong>Description:</strong>
                   <p className="bill-description">{selectedBill.description}</p>
                 </div>
+                {selectedBill['xml link'] && (
+                  <div className="bill-detail-item">
+                    <strong>Full Bill Text:</strong>
+                    <div className="xml-link-container">
+                      <a 
+                        href={selectedBill['xml link']} 
+                        target="_blank" 
+                        rel="noopener noreferrer"
+                        className="xml-link"
+                      >
+                        View Full Bill Text (XML)
+                      </a>
+                    </div>
+                  </div>
+                )}
                 {selectedBill.categorized_populations && (
                   <div className="bill-detail-item">
                     <strong>Demographic Categories:</strong>
@@ -1564,6 +1579,32 @@ function MainApp() {
         .tag-category {
           font-weight: 600;
           opacity: 0.8;
+        }
+        
+        /* New styles for XML link */
+        .xml-link-container {
+          margin-top: 0.75rem;
+          padding-top: 0.75rem;
+          border-top: 1px solid #e5e7eb;
+        }
+
+        .xml-link {
+          display: inline-block;
+          background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+          color: white;
+          padding: 0.6rem 1.2rem;
+          border-radius: 8px;
+          font-size: 0.9rem;
+          font-weight: 500;
+          text-decoration: none;
+          transition: all 0.2s ease;
+          white-space: nowrap;
+        }
+
+        .xml-link:hover {
+          background: linear-gradient(135deg, #764ba2 0%, #667eea 100%);
+          transform: translateY(-1px);
+          box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
         }
         
       `}</style>

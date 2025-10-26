@@ -121,7 +121,8 @@ def query_bills_by_demographics(demographics):
                     'affected_populations_summary': bill_data.get('demographics', ''),
                     'categorized_populations': bill_data.get('demographics', ''),
                     'population_affect_summary': bill_data.get('population affect summary', 'No population analysis available'),
-                    'bill_number': bill_id
+                    'bill_number': bill_id, 
+                    'xml link': bill_data.get('xml link', '')
                 })
                 
                 # Stop at 10 bills
@@ -172,7 +173,8 @@ def get_top_10_bills():
                 'affected_populations_summary': bill_data.get('demographics', ''),
                 'categorized_populations': bill_data.get('demographics', ''),
                 'population_affect_summary': bill_data.get('population affect summary', 'No population analysis available'),
-                'bill_number': bill_id
+                'bill_number': bill_id,
+                'xml link': bill_data.get('xml link', '')
             })
         
         print(f"Total bills found: {bill_count}")
