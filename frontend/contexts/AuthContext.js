@@ -6,7 +6,8 @@ import {
   signInWithEmailAndPassword, 
   createUserWithEmailAndPassword, 
   signOut, 
-  onAuthStateChanged
+  onAuthStateChanged,
+  updateProfile
 } from 'firebase/auth'
 
 const AuthContext = createContext(undefined)
@@ -32,9 +33,13 @@ export function AuthProvider({ children }) {
     }
   }
 
-  const signUp = async (email, password) => {
+  const signUp = async (email, password, name) => {
     try {
-      await createUserWithEmailAndPassword(auth, email, password)
+      const userCredential = await createUserWithEmailAndPassword(auth, email, password)
+      // Update the user's display name
+      await updateProfile(userCredential.user, {
+        displayName: name
+      })
     } catch (error) {
       throw error
     }
@@ -42,8 +47,11 @@ export function AuthProvider({ children }) {
 
   const logout = async () => {
     try {
+      setLoading(true)
       await signOut(auth)
+      // The onAuthStateChanged listener will handle setting loading to false
     } catch (error) {
+      setLoading(false)
       throw error
     }
   }
