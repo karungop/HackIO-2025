@@ -49,23 +49,44 @@ def query_bills_by_demographics(demographics):
             bill_data = bill_doc.to_dict()
             bill_id = bill_doc.id
             
-            # For now, since demographics are stored as a single field, 
-            # we'll return bills that have any demographic data when user provides demographics
+            # Check if bill matches user demographics
             has_match = False
             if any(demographics.values()):  # If user provided any demographics
-                # Check if bill has demographic data
                 if 'demographics' in bill_data and bill_data['demographics']:
-                    has_match = True
+                    bill_demographics = bill_data['demographics']
+                    
+                    # Check each demographic field for matches (excluding other_groups)
+                    for field, user_values in demographics.items():
+                        if field == 'other_groups':
+                            continue  # Skip other_groups as requested
+                            
+                        if field in bill_demographics:
+                            bill_values = bill_demographics[field] if isinstance(bill_demographics[field], list) else [bill_demographics[field]]
+                            user_values_list = user_values if isinstance(user_values, list) else [user_values]
+                            
+                            # Only include bills that have matching demographic data
+                            if bill_values and any(bill_values):  # Check if not empty
+                                if any(value in bill_values for value in user_values_list):
+                                    has_match = True
+                                    break
+                            # If bill has no demographic data for this field, do NOT include it
+                            # (only include bills with specific demographic targeting)
+                            else:
+                                has_match = False
+                                break
             else:
                 # If no user demographics, include all bills
                 has_match = True
             
             if has_match:
+                # Use latest action date if available, otherwise use regular date
+                latest_action_date = bill_data.get('latest action date', 'N/A')
+                
                 matching_bills.append({
                     'id': bill_id,
                     'title': bill_data.get('title', 'No title available'),
                     'description': bill_data.get('summary', 'No description available'),
-                    'update_date': bill_data.get('date', 'N/A'),
+                    'update_date': latest_action_date,
                     'affected_populations_summary': bill_data.get('demographics', ''),
                     'categorized_populations': bill_data.get('demographics', ''),
                     'bill_number': bill_id
@@ -108,11 +129,14 @@ def get_top_10_bills():
             print(f"Found bill {bill_count}: {bill_id}")
             print(f"Bill data keys: {list(bill_data.keys())}")
             
+            # Use latest action date if available, otherwise use regular date
+            latest_action_date = bill_data.get('latest action date') or bill_data.get('date', 'N/A')
+            
             top_bills.append({
                 'id': bill_id,
                 'title': bill_data.get('title', 'No title available'),
                 'description': bill_data.get('summary', 'No description available'),
-                'update_date': bill_data.get('date', 'N/A'),
+                'update_date': latest_action_date,
                 'affected_populations_summary': bill_data.get('demographics', ''),
                 'categorized_populations': bill_data.get('demographics', ''),
                 'bill_number': bill_id
@@ -285,8 +309,10 @@ def get_data():
         for field in demographic_fields:
             value = request.args.get(field)
             if value:
-                # Handle comma-separated values
-                demographics[field] = [v.strip() for v in value.split(',') if v.strip()]
+                # URL decode the value first, then handle comma-separated values
+                import urllib.parse
+                decoded_value = urllib.parse.unquote(value)
+                demographics[field] = [v.strip() for v in decoded_value.split(',') if v.strip()]
         
         # Check if any demographics are provided
         has_demographics = any(demographics.values())
